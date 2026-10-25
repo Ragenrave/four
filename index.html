@@ -1,0 +1,567 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D5F92">
+<title>Four</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;0,800;1,600;1,700&display=swap">
+<style>
+/* Classic Four — linen-blue ground, translucent navy panels, white grid cards, glossy pills */
+:root{
+  --linen:#2F8DC4; --panel:rgba(14,72,118,.55); --panel-hi:#1D5F92; --panel-lo:#134A76;
+  --on-blue:#FFFFFF; --card:#FFFFFF; --ink:#1F3A4D; --muted:#3C5A70; --rule:#B9CFDD; --band:#F7FAFC;
+  --tag:#D4E04A; --bank:#4FC3F7;
+  --go:#5BAF2C; --go-hi:#8ED35E; --go-edge:#4A9622;
+  --warn:#EBA820; --warn-hi:#F7C548; --warn-edge:#C98A0E;
+  --bad:#D2413A; --bad-hi:#EE6A5F; --bad-edge:#A52A24;
+  --zero:#C9D6E0; --zero-edge:#9DB6C8;
+  --font:'Source Sans 3','Myriad Pro','Segoe UI',system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  font-family:var(--font);color:var(--on-blue);font-size:15px;
+  background-color:var(--linen);
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,40,80,.05) 0 1px,transparent 1px 3px);
+  -webkit-tap-highlight-color:transparent;
+}
+#app{max-width:520px;margin:0 auto;min-height:100%;
+  padding:calc(14px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(96px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));
+  display:flex;flex-direction:column;gap:10px}
+button{font-family:inherit}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--warn-hi);outline-offset:2px}
+.emb{text-shadow:0 1px 1px rgba(0,25,50,.55)}
+.panel{background:var(--panel);border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 6px rgba(0,30,60,.25)}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 14px;background:linear-gradient(var(--panel-hi),var(--panel-lo));border-radius:10px 10px 0 0}
+.bar.solo{border-radius:10px}
+.bar h1{margin:0;font-size:21px;font-weight:700}
+.iconbtn{width:44px;height:44px;margin:-6px -4px -6px -10px;border:0;background:none;color:#fff;display:flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
+.row{display:flex;align-items:center;gap:12px;padding:10px 14px}
+.chip{margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.22);font-size:12px;font-weight:600;border:0;color:#fff;cursor:pointer;min-height:28px}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--go-hi)}
+.chip.off i{background:var(--warn-hi)}
+.chip.busy i{background:#fff;animation:pulse 1s infinite}
+@keyframes pulse{50%{opacity:.3}}
+@media (prefers-reduced-motion:reduce){.chip.busy i{animation:none}}
+.group{padding:10px 14px 8px}
+.group-h{display:flex;align-items:center;gap:8px;font-size:17px;font-weight:700;font-style:italic;width:100%;background:none;border:0;color:#fff;padding:0;cursor:pointer;text-align:left}
+.group-h .tri{transition:transform .15s}
+.group-h[aria-expanded="false"] .tri{transform:rotate(-90deg)}
+.group-h span:last-child{margin-left:auto}
+.acct{display:flex;justify-content:space-between;gap:10px;padding:6px 0 6px 18px;font-size:16px;font-weight:600;font-variant-numeric:tabular-nums;width:100%;background:none;border:0;color:#fff;text-align:left;cursor:pointer;min-height:36px;align-items:center}
+.acct span:first-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card{background:var(--card);color:var(--ink);border-radius:10px;box-shadow:0 2px 8px rgba(0,30,60,.3);overflow:hidden}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;padding:10px 14px;background:linear-gradient(#F4F8FB,#E2ECF3);border-bottom:1px solid #C6D7E3}
+.card-h b{font-size:17px;font-weight:800;color:var(--panel-lo)}
+.card-h small{font-size:13px;font-weight:600;color:var(--muted)}
+.line{display:grid;grid-template-columns:minmax(0,1fr) 92px 104px;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px dotted var(--rule);font-size:15px;font-variant-numeric:tabular-nums}
+.line:last-child{border-bottom:0}
+.line.head{padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);background:var(--band)}
+.line .name{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.line .num{text-align:right;color:var(--muted);font-size:14px}
+.line.sub{padding-left:26px}
+.line.mc{background:linear-gradient(#EAF2F8,#DCE8F1);color:var(--panel-lo);font-weight:800;font-size:14px;padding-block:6px;cursor:pointer;border:0;border-bottom:1px dotted var(--rule);width:100%;text-align:left;font-family:inherit}
+.pill{justify-self:end;padding:2px 9px;border-radius:999px;font-size:13px;font-weight:700;white-space:nowrap}
+.pill.g{background:linear-gradient(#7DCB4E,var(--go));border:1px solid var(--go-edge);color:#fff;text-shadow:0 1px 0 rgba(0,60,0,.45)}
+.pill.o{background:linear-gradient(var(--warn-hi),var(--warn));border:1px solid var(--warn-edge);color:#3B2600}
+.pill.r{background:linear-gradient(var(--bad-hi),var(--bad));border:1px solid var(--bad-edge);color:#fff;text-shadow:0 1px 0 rgba(90,0,0,.4)}
+.pill.z{background:linear-gradient(#E6EDF2,var(--zero));border:1px solid var(--zero-edge);color:var(--muted)}
+.atb{display:flex;align-items:center;justify-content:space-between;gap:10px;border-radius:10px;padding:10px 14px;background:linear-gradient(#F4F8FB,#DCE7EF);border:1px solid var(--zero-edge);color:var(--ink);box-shadow:0 2px 6px rgba(0,30,60,.25)}
+.atb b{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+.atb.pos b{color:#2E7A12}.atb.neg b{color:var(--bad)}.atb.zero b{color:var(--muted)}
+.monthnav{display:flex;align-items:center;gap:4px;padding:6px}
+.monthnav .t{flex:1;text-align:center}
+.monthnav .t div:first-child{font-size:22px;font-weight:800;text-transform:uppercase}
+.monthnav .t div:last-child{font-size:12px;font-weight:600;opacity:.92}
+.navbtn{width:44px;height:44px;border:0;background:none;display:flex;align-items:center;justify-content:center;cursor:pointer;border-radius:10px}
+.reg{display:grid;grid-template-columns:50px minmax(0,1fr) auto 20px;gap:8px;align-items:center;padding:8px 12px;border-bottom:1px dotted var(--rule);font-size:14px;font-variant-numeric:tabular-nums}
+.reg:last-child{border-bottom:0}
+.reg .d{color:var(--muted)}
+.reg b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reg .c{font-size:13px;color:var(--muted);display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.reg .amt{text-align:right;font-weight:700}
+.reg .amt.in{color:#2E7A12}
+.cl{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+.cl.C{background:var(--go);color:#fff}
+.cl.U{border:1.5px solid var(--zero-edge)}
+.bal3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:10px 8px 12px;text-align:center;font-variant-numeric:tabular-nums}
+.bal3 small{display:block;font-size:12px;font-weight:600;opacity:.85}
+.bal3 b{font-size:16px;font-weight:700}
+.bal3 b.big{font-size:18px;font-weight:800}
+.dock{position:fixed;left:0;right:0;bottom:0;padding:0 max(12px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));pointer-events:none}
+.dock-in{max-width:496px;margin:0 auto;display:flex;gap:10px;align-items:center;pointer-events:auto}
+.dock .panel{flex:1;border-radius:12px;display:flex;justify-content:space-around;padding:4px 0;background:rgba(14,72,118,.88);backdrop-filter:blur(6px)}
+.tab{width:48px;height:48px;border:0;background:none;display:flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
+.tab[aria-current="page"]{background:rgba(0,0,0,.28)}
+.btn-go{height:56px;padding:0 18px;border-radius:12px;background:linear-gradient(var(--go-hi),var(--go));border:1px solid var(--go-edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(0,30,60,.3);display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 0 rgba(0,60,0,.45);cursor:pointer;white-space:nowrap}
+.btn-go[disabled]{filter:grayscale(.6);opacity:.75;cursor:default}
+.btn-lite{height:48px;padding:0 16px;border-radius:12px;background:linear-gradient(#F4F8FB,#D9E5EE);border:1px solid var(--zero-edge);color:var(--panel-lo);font-size:16px;font-weight:700;cursor:pointer}
+.note{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;font-size:14px;line-height:1.4}
+.note .dot{width:10px;height:10px;border-radius:50%;background:var(--warn-hi);margin-top:5px;flex-shrink:0}
+.form{display:flex;flex-direction:column;gap:12px;padding:14px}
+.form label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);display:block;margin-bottom:4px}
+.form input{width:100%;height:44px;border:1px solid #9DB6C8;border-radius:6px;padding:0 10px;font-family:inherit;font-size:16px;color:var(--ink)}
+.form p{margin:0;font-size:14px;color:var(--muted);line-height:1.45}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:9px 14px;border-bottom:1px dotted var(--rule);font-size:14px}
+.kv:last-child{border-bottom:0}
+.kv span{color:var(--muted)}
+.kv b{text-align:right;overflow-wrap:anywhere}
+.pick{display:block;width:100%;text-align:left;padding:12px 14px;border:0;border-bottom:1px dotted var(--rule);background:none;font-family:inherit;color:var(--ink);cursor:pointer}
+.pick b{display:block;font-size:16px}
+.pick small{color:var(--muted);font-size:13px}
+.empty{padding:28px 18px;text-align:center;line-height:1.5}
+.empty h2{margin:0 0 6px;font-size:22px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));background:#0E2F4A;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.3);max-width:90%;z-index:20}
+.more{display:block;width:100%;padding:12px;border:0;background:var(--band);color:var(--panel-lo);font-weight:700;font-family:inherit;font-size:15px;cursor:pointer}
+.err{color:#FFE3E0}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<nav class="dock" id="dock" hidden>
+  <div class="dock-in">
+    <div class="panel">
+      <button class="tab" data-go="home" aria-label="Home"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5z" fill="#4FC3F7"/><path d="M5 11h2v7H5zm4 0h2v7H9zm4 0h2v7h-2zm4 0h2v7h-2z" fill="#4FC3F7"/><rect x="3" y="19" width="18" height="2" fill="#4FC3F7"/></svg></button>
+      <button class="tab" data-go="budget" aria-label="Budget"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4v6.5L13.5 21 21 13.5 10.5 3H4a1 1 0 0 0-1 1z" fill="#D4E04A"/><circle cx="7.5" cy="7.5" r="1.6" fill="#134A76"/></svg></button>
+      <button class="tab" data-go="sync" aria-label="Sync and settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg></button>
+    </div>
+    <button class="btn-go" id="addBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
+  </div>
+</nav>
+<input type="file" id="dirPick" webkitdirectory directory multiple hidden>
+
+<script src="ynab4-engine.js"></script>
+<script>
+'use strict';
+/* ================= storage ================= */
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem('four.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('four.' + k, JSON.stringify(v)); } catch (e) {} },
+  del(k) { try { localStorage.removeItem('four.' + k); } catch (e) {} }
+};
+const IDB = (() => {
+  let dbp;
+  function db() {
+    if (!dbp) dbp = new Promise((res, rej) => {
+      const r = indexedDB.open('four', 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('files'); r.result.createObjectStore('kv'); };
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    });
+    return dbp;
+  }
+  async function op(store, mode, fn) {
+    const d = await db();
+    return new Promise((res, rej) => { const t = d.transaction(store, mode); const r = fn(t.objectStore(store)); t.oncomplete = () => res(r && r.result); t.onerror = () => rej(t.error); });
+  }
+  return {
+    get: (s, k) => op(s, 'readonly', (st) => st.get(k)),
+    put: (s, k, v) => op(s, 'readwrite', (st) => st.put(v, k)),
+    keys: (s) => op(s, 'readonly', (st) => st.getAllKeys()),
+    del: (s, k) => op(s, 'readwrite', (st) => st.delete(k)),
+    clear: (s) => op(s, 'readwrite', (st) => st.clear())
+  };
+})();
+
+/* ================= formatting ================= */
+const fmt = (n) => (n < 0 ? '−' : '') + Math.abs(Math.round(n)).toLocaleString('id-ID');
+const rp = (n) => (n < 0 ? '−Rp' : 'Rp') + Math.abs(Math.round(n)).toLocaleString('id-ID');
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const monthLabel = (m) => MONTHS[+m.slice(5, 7) - 1] + ' ' + m.slice(0, 4);
+const dm = (d) => d.slice(8, 10) + '/' + d.slice(5, 7);
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const todayISO = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+
+function paydayCycle() {
+  const day = LS.get('payday', 15);
+  const now = new Date(); now.setHours(0, 0, 0, 0);
+  let start = new Date(now.getFullYear(), now.getMonth(), day);
+  if (now < start) start = new Date(now.getFullYear(), now.getMonth() - 1, day);
+  const next = new Date(start.getFullYear(), start.getMonth() + 1, day);
+  const end = new Date(next - 86400000);
+  const f = (d) => d.getDate() + ' ' + MONTHS[d.getMonth()];
+  const total = Math.round((next - start) / 86400000), dayN = Math.round((now - start) / 86400000) + 1;
+  return { label: f(start) + ' – ' + f(end), daysLeft: Math.round((next - now) / 86400000), dayN, total };
+}
+function pillClass(c) {
+  if (Math.round(c.available) < 0) return 'r';
+  if (Math.round(c.available) === 0) return 'z';
+  const funded = c.available - c.activity; // what it started the month with plus what was budgeted
+  if (c.activity < 0 && funded > 0 && c.available / funded < 0.1) return 'o';
+  return 'g';
+}
+
+/* ================= Google Drive ================= */
+const SCOPE = 'https://www.googleapis.com/auth/drive';
+const DEFAULT_CLIENT_ID = '39356862452-eq79oprn3ra61nm5ofls75i4d7ruk0mr.apps.googleusercontent.com';
+const Drive = {
+  token: LS.get('token', null),
+  valid() { return this.token && this.token.exp > Date.now() + 60000; },
+  async ensureToken(interactive) {
+    if (this.valid()) return this.token.value;
+    const clientId = LS.get('clientId', DEFAULT_CLIENT_ID);
+    if (!clientId) throw new Error('Add your Google client ID in Sync & settings first.');
+    await loadGIS();
+    return new Promise((res, rej) => {
+      const tc = google.accounts.oauth2.initTokenClient({
+        client_id: clientId, scope: SCOPE, prompt: interactive ? 'consent' : '',
+        callback: (r) => {
+          if (r.error) return rej(new Error('Google sign-in failed: ' + r.error));
+          Drive.token = { value: r.access_token, exp: Date.now() + (r.expires_in - 60) * 1000 };
+          LS.set('token', Drive.token); res(Drive.token.value);
+        },
+        error_callback: (e) => rej(new Error(e && e.type === 'popup_closed' ? 'Google sign-in was closed before finishing.' : 'Google sign-in could not start.'))
+      });
+      tc.requestAccessToken();
+    });
+  },
+  async api(path, params, asText) {
+    const tok = await this.ensureToken(false);
+    const url = 'https://www.googleapis.com/drive/v3/' + path + (params ? '?' + new URLSearchParams(params) : '');
+    const r = await fetch(url, { headers: { Authorization: 'Bearer ' + tok } });
+    if (r.status === 401) { this.token = null; LS.del('token'); throw new Error('Google sign-in expired. Tap Refresh to sign in again.'); }
+    if (!r.ok) throw new Error('Google Drive said ' + r.status + ' for ' + path);
+    return asText ? r.text() : r.json();
+  },
+  async children(folderId) {
+    let out = [], pageToken;
+    do {
+      const p = { q: `'${folderId}' in parents and trashed=false`, fields: 'nextPageToken,files(id,name,mimeType,md5Checksum,modifiedTime,size)', pageSize: '1000', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' };
+      if (pageToken) p.pageToken = pageToken;
+      const r = await this.api('files', p);
+      out = out.concat(r.files); pageToken = r.nextPageToken;
+    } while (pageToken);
+    return out;
+  },
+  async findBudgets() {
+    const r = await this.api('files', { q: "name='Budget.ymeta' and trashed=false", fields: 'files(id,parents,modifiedTime)', pageSize: '50', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' });
+    const out = [];
+    for (const f of r.files) {
+      const pid = (f.parents || [])[0]; if (!pid) continue;
+      const folder = await this.api('files/' + pid, { fields: 'id,name,parents,modifiedTime', supportsAllDrives: 'true' });
+      let where = '';
+      try { if (folder.parents && folder.parents[0]) where = (await this.api('files/' + folder.parents[0], { fields: 'name', supportsAllDrives: 'true' })).name; } catch (e) {}
+      out.push({ id: folder.id, name: folder.name.replace(/~[0-9A-F]+\.ynab4$/i, ''), full: folder.name, where, modified: f.modifiedTime });
+    }
+    return out;
+  },
+  download(id) { return this.api('files/' + id, { alt: 'media', supportsAllDrives: 'true' }, true); }
+};
+let gisP;
+function loadGIS() {
+  if (window.google && google.accounts && google.accounts.oauth2) return Promise.resolve();
+  if (!gisP) gisP = new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.onload = res; s.onerror = () => rej(new Error('Could not reach Google sign-in. Check your connection.')); document.head.appendChild(s); });
+  return gisP;
+}
+
+/* ================= budget sources ================= */
+// A "tree" maps relative paths in the .ynab4 folder to file records {id, md5}. Directory listings are kept as arrays of names.
+async function syncFromDrive(folderId, onStep) {
+  onStep && onStep('Reading the budget folder…');
+  const tree = { files: {}, dirs: {} };
+  const root = await Drive.children(folderId);
+  tree.dirs[''] = root.map((f) => f.name);
+  const meta = root.find((f) => f.name === 'Budget.ymeta');
+  if (!meta) throw new Error('That folder has no Budget.ymeta. Pick the .ynab4 budget folder.');
+  tree.files['Budget.ymeta'] = { id: meta.id, md5: meta.md5Checksum };
+  const metaText = await cachedText(tree.files['Budget.ymeta']);
+  const dataName = JSON.parse(metaText).relativeDataFolderName;
+  const dataDir = root.find((f) => f.name === dataName);
+  if (!dataDir) throw new Error('The budget data folder ' + dataName + ' is missing on Drive. Is Google Drive still syncing?');
+  const dataKids = await Drive.children(dataDir.id);
+  tree.dirs[dataName] = dataKids.map((f) => f.name);
+  for (const k of dataKids) {
+    if (k.mimeType !== 'application/vnd.google-apps.folder') continue;
+    onStep && onStep('Reading ' + (k.name === 'devices' ? 'devices' : 'changes from ' + k.name.slice(0, 8)) + '…');
+    const kids = await Drive.children(k.id);
+    tree.dirs[dataName + '/' + k.name] = kids.map((f) => f.name);
+    kids.forEach((f) => { tree.files[dataName + '/' + k.name + '/' + f.name] = { id: f.id, md5: f.md5Checksum }; });
+    if (k.name !== 'devices') tree.folderIds = Object.assign(tree.folderIds || {}, { [dataName + '/' + k.name]: k.id });
+  }
+  tree.folderIds = Object.assign(tree.folderIds || {}, { '': folderId, [dataName]: dataDir.id });
+  return tree;
+}
+async function cachedText(rec) {
+  const key = rec.id + ':' + (rec.md5 || '');
+  const hit = await IDB.get('files', key);
+  if (hit != null) return hit;
+  if (!navigator.onLine) throw new Error('This file is not on the phone yet and you are offline.');
+  const text = await Drive.download(rec.id);
+  await IDB.put('files', key, text);
+  return text;
+}
+function treeIO(tree) {
+  return {
+    readText: async (p) => { const rec = tree.files[p]; if (!rec) throw new Error('Missing file in budget: ' + p); return cachedText(rec); },
+    list: async (d) => { if (!tree.dirs[d]) throw new Error('Missing folder: ' + d); return tree.dirs[d]; }
+  };
+}
+// Desktop testing: a folder picked from this computer
+function localIO(fileList) {
+  const byPath = {}, dirs = {};
+  for (const f of fileList) {
+    const parts = f.webkitRelativePath.split('/'); parts.shift();
+    byPath[parts.join('/')] = f;
+    for (let i = 0; i < parts.length; i++) {
+      const dir = parts.slice(0, i).join('/'), name = parts[i];
+      dirs[dir] = dirs[dir] || [];
+      if (!dirs[dir].includes(name)) dirs[dir].push(name);
+    }
+  }
+  return { readText: async (p) => { if (!byPath[p]) throw new Error('Missing file: ' + p); return byPath[p].text(); }, list: async (d) => dirs[d] || [] };
+}
+
+/* ================= app state ================= */
+const S = { budget: null, view: 'home', month: null, accountId: null, regLimit: 60, busy: false, status: '', error: '', open: LS.get('open', { off: false }), collapsed: {} };
+const app = document.getElementById('app');
+const dock = document.getElementById('dock');
+
+async function openBudget(io, source) {
+  const t0 = performance.now();
+  const b = await YNAB4.load(io);
+  S.budget = b; S.source = source;
+  S.month = S.month || b.currentMonth();
+  S.loadedMs = Math.round(performance.now() - t0);
+  render();
+}
+async function refresh(interactive) {
+  const folder = LS.get('folder', null);
+  if (!folder) { go('sync'); return; }
+  S.busy = true; S.error = ''; renderChip();
+  try {
+    if (interactive) await Drive.ensureToken(!Drive.valid() && !LS.get('everSignedIn', false));
+    LS.set('everSignedIn', true);
+    const tree = await syncFromDrive(folder.id, (s) => { S.status = s; renderChip(); });
+    await IDB.put('kv', 'tree', tree);
+    await openBudget(treeIO(tree), 'drive');
+    LS.set('lastSync', Date.now());
+    toast('Up to date with Google Drive');
+  } catch (e) {
+    S.error = e.message || String(e); toast(S.error);
+  } finally { S.busy = false; S.status = ''; render(); }
+}
+async function boot() {
+  dock.hidden = false;
+  const tree = await IDB.get('kv', 'tree').catch(() => null);
+  if (tree) {
+    try { await openBudget(treeIO(tree), 'cache'); } catch (e) { S.error = e.message; }
+  }
+  if (!S.budget) { S.view = LS.get('folder', null) ? 'home' : 'welcome'; }
+  render();
+  if (LS.get('folder', null) && navigator.onLine && LS.get('clientId', DEFAULT_CLIENT_ID) && Drive.valid()) refresh(false);
+}
+
+/* ================= rendering ================= */
+function go(v, extra) { S.view = v; if (extra) Object.assign(S, extra); render(); window.scrollTo(0, 0); }
+dock.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
+document.getElementById('addBtn').addEventListener('click', () => toast('Logging transactions comes in the next build. Reading works now.'));
+let toastT;
+function toast(msg) {
+  let t = document.querySelector('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
+  t.textContent = msg; clearTimeout(toastT); toastT = setTimeout(() => t.remove(), 3200);
+}
+function syncChip() {
+  const off = !navigator.onLine;
+  const cls = S.busy ? 'busy' : off ? 'off' : '';
+  const text = S.busy ? (S.status || 'Syncing…') : off ? 'Offline' : lastSyncText();
+  return `<button class="chip ${cls}" id="chip" aria-label="Refresh from Google Drive"><i></i>${esc(text)}</button>`;
+}
+function renderChip() { const c = document.getElementById('chip'); if (c) c.outerHTML = syncChip(); bindChip(); }
+function bindChip() { const c = document.getElementById('chip'); if (c) c.onclick = () => { if (!S.busy) refresh(true); }; }
+function lastSyncText() {
+  const t = LS.get('lastSync', 0); if (!t) return 'Not synced';
+  const min = Math.round((Date.now() - t) / 60000);
+  return min < 1 ? 'Synced now' : min < 60 ? 'Synced ' + min + 'm ago' : min < 1440 ? 'Synced ' + Math.round(min / 60) + 'h ago' : 'Synced ' + Math.round(min / 1440) + 'd ago';
+}
+
+const ICON = {
+  tag: '<svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4v6.5L13.5 21 21 13.5 10.5 3H4a1 1 0 0 0-1 1z" fill="#D4E04A" stroke="#8FA312" stroke-width="1.2"/><circle cx="7.5" cy="7.5" r="1.6" fill="#134A76"/></svg>',
+  bank: '<svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5z" fill="#4FC3F7"/><path d="M5 11h2v7H5zm4 0h2v7H9zm4 0h2v7h-2zm4 0h2v7h-2z" fill="#4FC3F7"/><rect x="3" y="19" width="18" height="2" fill="#4FC3F7"/></svg>',
+  tri: '<svg class="tri" width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><path d="M0 2h10L5 8z" fill="#fff"/></svg>',
+  back: '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 4 6 12l10 8z" fill="#fff"/></svg>',
+  fwd: '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4l10 8-10 8z" fill="#fff"/></svg>',
+  lock: '<svg width="16" height="16" viewBox="0 0 24 24" role="img" aria-label="Reconciled"><rect x="5" y="11" width="14" height="10" rx="2" fill="#134A76"/><path d="M8 11V7a4 4 0 0 1 8 0v4" fill="none" stroke="#134A76" stroke-width="2.4"/></svg>'
+};
+
+function render() {
+  document.querySelectorAll('.tab').forEach((t) => t.toggleAttribute('aria-current', t.dataset.go === S.view || (S.view === 'account' && t.dataset.go === 'home')));
+  document.querySelectorAll('.tab[aria-current]').forEach((t) => t.setAttribute('aria-current', 'page'));
+  const v = S.view;
+  if (v === 'welcome' || (!S.budget && v !== 'sync')) app.innerHTML = viewWelcome();
+  else if (v === 'home') app.innerHTML = viewHome();
+  else if (v === 'budget') app.innerHTML = viewBudget();
+  else if (v === 'account') app.innerHTML = viewAccount();
+  else if (v === 'sync') app.innerHTML = viewSync();
+  bind();
+}
+
+function viewWelcome() {
+  return `
+  <div class="panel"><div class="bar solo">${ICON.tag}<h1 class="emb">Four</h1>${syncChip()}</div></div>
+  <div class="panel empty">
+    <h2 class="emb">Your YNAB 4 budget, on your phone</h2>
+    <p class="emb">Connect the Google Drive that holds your .ynab4 budget. Four reads it directly and keeps a copy here for when you're offline.</p>
+  </div>
+  <button class="btn-go" data-act="setup">Set up Google Drive</button>
+  ${S.error ? `<div class="panel note"><span class="dot"></span><span class="emb">${esc(S.error)}</span></div>` : ''}`;
+}
+
+function viewHome() {
+  const b = S.budget, t = b.totals(), accts = b.accountBalances();
+  const on = accts.filter((a) => a.onBudget), off = accts.filter((a) => !a.onBudget);
+  const m = b.currentMonth(), mo = b.month(m), cyc = paydayCycle();
+  const atbCls = Math.round(mo.availableToBudget) > 0 ? 'pos' : Math.round(mo.availableToBudget) < 0 ? 'neg' : 'zero';
+  const cats = [].concat(...mo.groups.map((g) => g.categories));
+  const watch = cats.filter((c) => c.activity < 0 || c.available < 0)
+    .sort((a, b2) => { const pa = pillClass(a), pb = pillClass(b2); const rank = { r: 0, o: 1, z: 2, g: 3 }; return rank[pa] - rank[pb] || a.activity - b2.activity; }).slice(0, 7);
+  const acctRow = (a) => `<button class="acct emb" data-acct="${a.id}"><span>${esc(a.name)}</span><span>${fmt(a.working)}</span></button>`;
+  return `
+  <div class="panel">
+    <div class="bar">${ICON.tag}<h1 class="emb">Budget</h1>${syncChip()}</div>
+    <div class="row">${ICON.bank}<span class="emb" style="font-size:19px;font-weight:700">All Accounts</span><span class="emb" style="margin-left:auto;font-size:17px;font-weight:700;font-variant-numeric:tabular-nums">${rp(t.all)}</span></div>
+  </div>
+  <div class="panel group">
+    <button class="group-h emb" data-toggle="on" aria-expanded="${S.open.on !== false}">${ICON.tri}<span>Budget Accounts</span><span>${rp(t.onBudget)}</span></button>
+    ${S.open.on !== false ? on.map(acctRow).join('') : ''}
+  </div>
+  <div class="panel group">
+    <button class="group-h emb" data-toggle="off" aria-expanded="${!!S.open.off}">${ICON.tri}<span>Off-Budget Accounts</span><span>${rp(t.offBudget)}</span></button>
+    ${S.open.off ? off.map(acctRow).join('') : ''}
+  </div>
+  <div class="card">
+    <div class="card-h"><b>${monthLabel(m)}</b><small>Available to Budget · <span style="color:${atbCls === 'neg' ? 'var(--bad)' : atbCls === 'pos' ? '#2E7A12' : 'var(--muted)'}">${rp(mo.availableToBudget)}</span></small></div>
+    <div class="line head" style="grid-template-columns:minmax(0,1fr) auto"><span>PAYDAY CYCLE ${esc(cyc.label.toUpperCase())}</span><span style="text-align:right">${cyc.daysLeft} DAYS TO PAYDAY</span></div>
+    <div class="line head"><span>CATEGORY</span><span class="num" style="font-size:11px">OUTFLOWS</span><span style="text-align:right">BALANCE</span></div>
+    ${watch.map((c) => `<div class="line"><span class="name">${esc(c.name)}</span><span class="num">${fmt(c.activity)}</span><span class="pill ${pillClass(c)}">${fmt(c.available)}</span></div>`).join('') || '<div class="line"><span class="name">No spending yet this month</span></div>'}
+    <button class="more" data-go2="budget">All categories</button>
+  </div>
+  ${S.error ? `<div class="panel note"><span class="dot"></span><span class="emb err">${esc(S.error)}</span></div>` : ''}`;
+}
+
+function viewBudget() {
+  const b = S.budget, m = S.month || b.currentMonth(), mo = b.month(m);
+  const atb = Math.round(mo.availableToBudget);
+  const isCur = m === b.currentMonth();
+  const showAll = LS.get('showEmpty', false);
+  const used = (c) => Math.round(c.budgeted) !== 0 || Math.round(c.activity) !== 0 || Math.round(c.available) !== 0;
+  const hiddenCount = mo.groups.reduce((n, g) => n + g.categories.filter((c) => !used(c)).length, 0);
+  return `
+  <div class="panel monthnav">
+    <button class="navbtn" data-month="-1" aria-label="Previous month">${ICON.back}</button>
+    <div class="t emb"><div>${monthLabel(m)}</div><div>${isCur ? 'Payday cycle ' + esc(paydayCycle().label) : '&nbsp;'}</div></div>
+    <button class="navbtn" data-month="1" aria-label="Next month">${ICON.fwd}</button>
+  </div>
+  <div class="atb ${atb > 0 ? 'pos' : atb < 0 ? 'neg' : 'zero'}"><span style="font-size:15px;font-weight:700">Available to Budget</span><b>${rp(mo.availableToBudget)}</b></div>
+  <div class="card">
+    <div class="line head"><span>CATEGORY</span><span class="num" style="font-size:11px">BUDGETED</span><span style="text-align:right">BALANCE</span></div>
+    ${mo.groups.map((g) => Object.assign({}, g, { categories: showAll ? g.categories : g.categories.filter(used) })).filter((g) => g.categories.length).map((g) => {
+      const closed = S.collapsed[g.id];
+      const sb = g.categories.reduce((s, c) => s + c.budgeted, 0), sa = g.categories.reduce((s, c) => s + c.available, 0);
+      return `<button class="line mc" data-mc="${g.id}" aria-expanded="${!closed}"><span>${closed ? '▸' : '▾'} ${esc(g.name)}</span><span class="num" style="color:inherit;font-weight:700">${fmt(sb)}</span><span style="text-align:right">${fmt(sa)}</span></button>` +
+        (closed ? '' : g.categories.map((c) => `<div class="line sub"><span class="name">${esc(c.name)}</span><span class="num">${fmt(c.budgeted)}</span><span class="pill ${pillClass(c)}">${fmt(c.available)}</span></div>`).join(''));
+    }).join('')}
+    <button class="more" data-allcats="1">${showAll ? 'Hide empty categories' : 'Show ' + hiddenCount + ' empty categories'}</button>
+  </div>`;
+}
+
+function viewAccount() {
+  const b = S.budget, a = b.accountBalances().find((x) => x.id === S.accountId);
+  if (!a) return viewHome();
+  const rows = b.register(a.id);
+  const shown = rows.slice(0, S.regLimit);
+  return `
+  <div class="panel">
+    <div class="bar"><button class="iconbtn" data-go2="home" aria-label="Back">${ICON.back}</button><h1 class="emb" style="font-size:20px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(a.name)}</h1><span class="emb" style="margin-left:auto;font-size:13px;font-style:italic;font-weight:600;opacity:.9;white-space:nowrap">${a.onBudget ? 'Budget Account' : 'Off-Budget'}</span></div>
+    <div class="bal3 emb"><div><small>Cleared</small><b>${fmt(a.cleared)}</b></div><div><small>+ Uncleared</small><b>${fmt(a.uncleared)}</b></div><div><small>= Working</small><b class="big">${fmt(a.working)}</b></div></div>
+  </div>
+  <div class="card">
+    <div class="reg" style="padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);background:var(--band)"><span>DATE</span><span>PAYEE · CATEGORY</span><span style="text-align:right">AMOUNT</span><span></span></div>
+    ${shown.map((r) => `<div class="reg"><span class="d">${dm(r.date)}</span><span style="min-width:0"><b>${esc(r.payee || '—')}</b><span class="c">${esc([r.category, r.memo].filter(Boolean).join(' · '))}</span></span><span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>${r.cleared === 'Reconciled' ? ICON.lock : r.cleared === 'Cleared' ? '<span class="cl C" title="Cleared">C</span>' : '<span class="cl U" title="Uncleared"></span>'}</div>`).join('') || '<div class="reg"><span></span><span>No transactions</span></div>'}
+    ${rows.length > S.regLimit ? `<button class="more" data-more="1">Show more (${rows.length - S.regLimit} older)</button>` : ''}
+  </div>`;
+}
+
+function viewSync() {
+  const folder = LS.get('folder', null), b = S.budget;
+  const clientId = LS.get('clientId', DEFAULT_CLIENT_ID);
+  const devs = b ? b.info.devices.map((d) => d.shortDeviceId + ' · ' + d.friendlyName).join(', ') : '—';
+  return `
+  <div class="panel">
+    <div class="bar">${ICON.tag}<h1 class="emb">Sync &amp; Settings</h1>${syncChip()}</div>
+    <div class="note emb"><span class="dot" style="background:${navigator.onLine ? 'var(--go-hi)' : 'var(--warn-hi)'}"></span><span>${navigator.onLine ? 'Online.' : 'Offline. You can still read the budget saved on this phone.'} This build reads your budget. Logging transactions comes next.</span></div>
+  </div>
+  <div class="card">
+    <div class="line head" style="grid-template-columns:1fr"><span>CONNECTION</span></div>
+    <div class="kv"><span>Budget</span><b>${folder ? esc(folder.name) : 'Not chosen'}</b></div>
+    <div class="kv"><span>Folder on Drive</span><b>${folder ? esc(folder.where || '—') : '—'}</b></div>
+    <div class="kv"><span>Devices in budget</span><b>${esc(devs)}</b></div>
+    <div class="kv"><span>Read from</span><b>${S.source === 'drive' ? 'Google Drive' : S.source === 'cache' ? 'Saved copy on this phone' : S.source === 'local' ? 'Folder on this computer' : '—'}</b></div>
+    <div class="kv"><span>Last synced</span><b>${esc(lastSyncText())}</b></div>
+    ${b ? `<div class="kv"><span>Snapshot + changes</span><b>${b.info.base} snapshot + ${b.info.appliedDiffs.length} change files</b></div>` : ''}
+  </div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap">
+    <button class="btn-go" style="flex:2" data-act="refresh" ${folder ? '' : 'disabled'}>Refresh from Drive</button>
+    <button class="btn-lite" style="flex:1;height:56px" data-act="choose">${folder ? 'Change budget' : 'Choose budget'}</button>
+  </div>
+  <div id="picker"></div>
+  <form class="card form" id="settings">
+    <div><label for="clientId">GOOGLE CLIENT ID</label><input id="clientId" name="clientId" value="${esc(clientId)}" placeholder="…apps.googleusercontent.com" autocomplete="off" spellcheck="false"></div>
+    <div><label for="payday">PAYDAY (DAY OF MONTH)</label><input id="payday" name="payday" type="number" min="1" max="28" value="${LS.get('payday', 15)}"></div>
+    <p>This client ID belongs to your own Google Cloud project, Four, so only you can sign in. Leave it as it is.</p>
+    <button class="btn-lite" type="submit">Save settings</button>
+  </form>
+  <div class="card form">
+    <p><b style="color:var(--ink)">On a computer?</b> You can open the .ynab4 folder directly to try Four without Google Drive.</p>
+    <button class="btn-lite" data-act="local">Open budget folder on this computer</button>
+  </div>`;
+}
+
+function bind() {
+  bindChip();
+  app.querySelectorAll('[data-acct]').forEach((el) => el.onclick = () => go('account', { accountId: el.dataset.acct, regLimit: 60 }));
+  app.querySelectorAll('[data-go2]').forEach((el) => el.onclick = () => go(el.dataset.go2));
+  app.querySelectorAll('[data-toggle]').forEach((el) => el.onclick = () => { const k = el.dataset.toggle; S.open[k] = !(k === 'on' ? S.open.on !== false : S.open[k]); LS.set('open', S.open); render(); });
+  app.querySelectorAll('[data-month]').forEach((el) => el.onclick = () => { S.month = YNAB4.addMonths(S.month, +el.dataset.month); render(); });
+  app.querySelectorAll('[data-mc]').forEach((el) => el.onclick = () => { S.collapsed[el.dataset.mc] = !S.collapsed[el.dataset.mc]; render(); });
+  app.querySelectorAll('[data-allcats]').forEach((el) => el.onclick = () => { LS.set('showEmpty', !LS.get('showEmpty', false)); render(); });
+  app.querySelectorAll('[data-more]').forEach((el) => el.onclick = () => { S.regLimit += 100; render(); });
+  app.querySelectorAll('[data-act]').forEach((el) => el.onclick = () => act(el.dataset.act));
+  const f = document.getElementById('settings');
+  if (f) f.onsubmit = (e) => { e.preventDefault(); LS.set('clientId', f.clientId.value.trim()); LS.set('payday', Math.min(28, Math.max(1, +f.payday.value || 15))); toast('Settings saved'); render(); };
+}
+
+async function act(a) {
+  if (a === 'setup') { go('sync'); return; }
+  if (a === 'refresh') { refresh(true); return; }
+  if (a === 'local') { document.getElementById('dirPick').click(); return; }
+  if (a === 'choose') {
+    const box = document.getElementById('picker');
+    box.innerHTML = '<div class="panel note"><span class="dot"></span><span class="emb">Looking for budgets on your Google Drive…</span></div>';
+    try {
+      await Drive.ensureToken(true); LS.set('everSignedIn', true);
+      const list = await Drive.findBudgets();
+      if (!list.length) { box.innerHTML = '<div class="panel note"><span class="dot"></span><span class="emb">No YNAB 4 budgets found on this Google Drive.</span></div>'; return; }
+      box.innerHTML = '<div class="card"><div class="line head" style="grid-template-columns:1fr"><span>PICK YOUR BUDGET</span></div>' +
+        list.map((x, i) => `<button class="pick" data-i="${i}"><b>${esc(x.name)}</b><small>in ${esc(x.where || 'My Drive')} · updated ${esc((x.modified || '').slice(0, 10))}</small></button>`).join('') + '</div>';
+      box.querySelectorAll('.pick').forEach((el) => el.onclick = () => { const x = list[+el.dataset.i]; LS.set('folder', x); S.view = 'home'; refresh(false); });
+    } catch (e) { box.innerHTML = `<div class="panel note"><span class="dot"></span><span class="emb">${esc(e.message)}</span></div>`; }
+  }
+}
+document.getElementById('dirPick').addEventListener('change', async (e) => {
+  const files = [...e.target.files].filter((f) => /\.(ymeta|ydevice|yfull|ydiff)$/.test(f.name));
+  if (!files.length) { toast('That folder has no YNAB 4 budget files.'); return; }
+  try { S.error = ''; await openBudget(localIO(files), 'local'); go('home'); toast('Opened from this computer'); } catch (err) { toast(err.message); }
+});
+window.addEventListener('online', () => { renderChip(); if (LS.get('folder', null) && Drive.valid()) refresh(false); });
+window.addEventListener('offline', renderChip);
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+boot();
+</script>
+</body>
+</html>
