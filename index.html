@@ -121,6 +121,31 @@ a{color:inherit}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom,0px));background:#0E2F4A;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.3);max-width:90%;z-index:20}
 .more{display:block;width:100%;padding:12px;border:0;background:var(--band);color:var(--panel-lo);font-weight:700;font-family:inherit;font-size:15px;cursor:pointer}
 .err{color:#FFE3E0}
+/* add transaction */
+.seg{flex:1;height:40px;border:1px solid #0B3A5E;background:linear-gradient(#5AA9D8,#3B8CC0);color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+.seg.on{background:linear-gradient(#0F4C7A,#0B3A5E);box-shadow:inset 0 2px 4px rgba(0,0,0,.35);font-weight:800}
+.bigamt{display:block;width:100%;border:0;background:transparent;color:#fff;text-align:center;font-family:inherit;font-size:44px;font-weight:800;padding:2px 14px 14px;outline:none;font-variant-numeric:tabular-nums}
+.bigamt::placeholder{color:rgba(255,255,255,.5)}
+.fl{display:grid;grid-template-columns:96px minmax(0,1fr);align-items:center;gap:8px;padding:9px 14px;border-bottom:1px dotted var(--rule)}
+.fl label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.fl input:not([type=checkbox]),.fl select,.sel,.rowcat{width:100%;min-width:0;height:42px;border:1px solid #C6D7E3;border-radius:6px;padding:0 8px;font-family:inherit;font-size:16px;color:var(--ink);background:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap;padding:8px 14px 10px 118px;border-bottom:1px dotted var(--rule)}
+.pchip{border:1px solid #C6D7E3;background:var(--band);color:var(--panel-lo);border-radius:999px;padding:6px 10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;min-height:32px}
+.hint{padding:6px 14px 8px 118px;font-size:13px;color:var(--muted);border-bottom:1px dotted var(--rule);min-height:8px}
+.hint:empty{display:none}
+.actions{display:flex;gap:10px;padding-bottom:calc(8px + env(safe-area-inset-bottom,0px))}
+@media (max-width:380px){.chips,.hint{padding-left:14px}.fl{grid-template-columns:82px minmax(0,1fr)}}
+/* import */
+.imp{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:8px;align-items:start;padding:9px 12px;border-bottom:1px dotted var(--rule);font-size:14px;font-variant-numeric:tabular-nums}
+.imp:last-child{border-bottom:0}
+.imp input[type=checkbox]{width:22px;height:22px;margin-top:1px}
+.imp b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp .c{display:block;font-size:13px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp .amt{font-weight:700;text-align:right}.imp .amt.in{color:#2E7A12}
+.imp.off{background:#F3F6F8}.imp.off b,.imp.off .amt{color:#6C8294}
+.rowcat{height:36px;font-size:14px;margin:4px 0 2px}
+.rowcat.need{border-color:var(--warn-edge);background:#FFF6DA}
+.reg.pend{background:#FFF6DA}
 </style>
 </head>
 <body>
@@ -130,6 +155,7 @@ a{color:inherit}
     <div class="panel">
       <button class="tab" data-go="home" aria-label="Home"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9.5 12 4l9 5.5z" fill="#4FC3F7"/><path d="M5 11h2v7H5zm4 0h2v7H9zm4 0h2v7h-2zm4 0h2v7h-2z" fill="#4FC3F7"/><rect x="3" y="19" width="18" height="2" fill="#4FC3F7"/></svg></button>
       <button class="tab" data-go="budget" aria-label="Budget"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4v6.5L13.5 21 21 13.5 10.5 3H4a1 1 0 0 0-1 1z" fill="#D4E04A"/><circle cx="7.5" cy="7.5" r="1.6" fill="#134A76"/></svg></button>
+      <button class="tab" data-go="import" aria-label="Import statement"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3 3 3-3"/></svg></button>
       <button class="tab" data-go="sync" aria-label="Sync and settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg></button>
     </div>
     <button class="btn-go" id="addBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
@@ -251,7 +277,25 @@ const Drive = {
     }
     return out;
   },
-  download(id) { return this.api('files/' + id, { alt: 'media', supportsAllDrives: 'true' }, true); }
+  download(id) { return this.api('files/' + id, { alt: 'media', supportsAllDrives: 'true' }, true); },
+  async send(method, url, body, headers) {
+    const tok = await this.ensureToken(false);
+    const r = await fetch(url, { method, body, headers: Object.assign({ Authorization: 'Bearer ' + tok }, headers || {}) });
+    if (r.status === 401) { this.token = null; LS.del('token'); throw new Error('Google sign-in expired. Tap the sync chip to sign in again.'); }
+    if (!r.ok) throw new Error('Google Drive refused the change (' + r.status + ').');
+    return r.json();
+  },
+  upload(name, parentId, text) {
+    const b = 'four' + Math.random().toString(36).slice(2);
+    const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [parentId] })}\r\n--${b}\r\nContent-Type: application/octet-stream\r\n\r\n${text}\r\n--${b}--`;
+    return this.send('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,md5Checksum', body, { 'Content-Type': 'multipart/related; boundary=' + b });
+  },
+  update(id, text) {
+    return this.send('PATCH', 'https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media&supportsAllDrives=true&fields=id,md5Checksum', text, { 'Content-Type': 'application/octet-stream' });
+  },
+  mkdir(name, parentId) {
+    return this.send('POST', 'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id', JSON.stringify({ name, parents: [parentId], mimeType: 'application/vnd.google-apps.folder' }), { 'Content-Type': 'application/json' }).then((r) => r.id);
+  }
 };
 let gisP;
 function loadGIS() {
@@ -282,7 +326,7 @@ async function syncFromDrive(folderId, onStep) {
     const kids = await Drive.children(k.id);
     tree.dirs[dataName + '/' + k.name] = kids.map((f) => f.name);
     kids.forEach((f) => { tree.files[dataName + '/' + k.name + '/' + f.name] = { id: f.id, md5: f.md5Checksum }; });
-    if (k.name !== 'devices') tree.folderIds = Object.assign(tree.folderIds || {}, { [dataName + '/' + k.name]: k.id });
+    tree.folderIds = Object.assign(tree.folderIds || {}, { [dataName + '/' + k.name]: k.id });
   }
   tree.folderIds = Object.assign(tree.folderIds || {}, { '': folderId, [dataName]: dataDir.id });
   return tree;
@@ -322,32 +366,89 @@ const S = { budget: null, view: 'home', month: null, accountId: null, regLimit: 
 const app = document.getElementById('app');
 const dock = document.getElementById('dock');
 
+/* ---- entries made on the phone, waiting to go to YNAB 4 ---- */
+let PENDING = [];
+async function loadPending() { PENDING = (await IDB.get('kv', 'pending').catch(() => null)) || []; }
+async function savePending() { await IDB.put('kv', 'pending', PENDING); }
+function applyPending() {
+  if (!S.base) return;
+  try { S.budget = PENDING.length ? S.base.withItems(YNAB4.entitiesFor(S.base, PENDING.map((p) => p.entry))) : S.base; }
+  catch (e) { S.budget = S.base; S.error = 'A waiting entry could not be shown: ' + e.message; }
+}
+async function addPending(entries) {
+  entries.forEach((entry) => PENDING.push({ id: YNAB4.guid(), at: Date.now(), entry }));
+  await savePending(); applyPending();
+}
+
 async function openBudget(io, source) {
   const t0 = performance.now();
   const b = await YNAB4.load(io);
-  S.budget = b; S.source = source;
+  S.base = b; S.source = source;
+  applyPending();
   S.month = S.month || b.currentMonth();
   S.loadedMs = Math.round(performance.now() - t0);
   render();
 }
+
+// Publish waiting entries as this phone's own YNAB 4 change file.
+async function publish(folder) {
+  if (!PENDING.length) return 0;
+  S.status = 'Sending ' + PENDING.length + ' to YNAB 4…'; renderChip();
+  const tree = await syncFromDrive(folder.id);
+  await IDB.put('kv', 'tree', tree);
+  const base = await YNAB4.load(treeIO(tree));
+  const dataDir = base.info.meta.relativeDataFolderName;
+  let dev = LS.get('device', null);
+  if (dev && dev.folderId !== folder.id) dev = null;
+  if (dev) {
+    const onDrive = base.info.devices.find((d) => d.deviceGUID === dev.guid);
+    if (onDrive) dev.version = Math.max(dev.version, YNAB4.parseKnowledge(onDrive.knowledge)[dev.shortId] || 0);
+    else if (base.info.devices.some((d) => d.shortDeviceId === dev.shortId)) dev = null; // letter taken by someone else
+  }
+  if (!dev) dev = { shortId: YNAB4.nextDeviceId(base), guid: YNAB4.guid(), version: 0, friendlyName: "Aditya's phone (Classic Four)", folderId: folder.id };
+  let devFolderId = (tree.folderIds || {})[dataDir + '/' + dev.guid];
+  if (!devFolderId) devFolderId = await Drive.mkdir(dev.guid, tree.folderIds[dataDir]);
+  const items = YNAB4.entitiesFor(base, PENDING.map((p) => p.entry));
+  const out = YNAB4.buildDiff(base, dev, items);
+  await Drive.upload(out.diffName, devFolderId, out.diffText);
+  // the change file is on Drive: record the new version before anything else can fail
+  dev.version = out.newVersion; dev.pendingDeviceFile = out.deviceText; LS.set('device', dev);
+  const sent = PENDING.length; PENDING = []; await savePending();
+  await writeDeviceFile(tree, dataDir, out.deviceName);
+  return sent;
+}
+async function writeDeviceFile(tree, dataDir, name) {
+  const dev = LS.get('device', null);
+  if (!dev || !dev.pendingDeviceFile) return;
+  const rec = tree.files[dataDir + '/devices/' + (name || dev.shortId + '.ydevice')];
+  if (rec) await Drive.update(rec.id, dev.pendingDeviceFile);
+  else await Drive.upload(dev.shortId + '.ydevice', tree.folderIds[dataDir + '/devices'], dev.pendingDeviceFile);
+  delete dev.pendingDeviceFile; LS.set('device', dev);
+}
+
 async function refresh(interactive) {
   const folder = LS.get('folder', null);
   if (!folder) { go('sync'); return; }
+  if (S.busy) return;
   S.busy = true; S.error = ''; renderChip();
   try {
     if (interactive) await Drive.ensureToken(!Drive.valid() && !LS.get('everSignedIn', false));
     LS.set('everSignedIn', true);
-    const tree = await syncFromDrive(folder.id, (s) => { S.status = s; renderChip(); });
+    const sent = await publish(folder);
+    let tree = await syncFromDrive(folder.id, (s) => { S.status = s; renderChip(); });
+    const dev = LS.get('device', null);
+    if (dev && dev.pendingDeviceFile) { await writeDeviceFile(tree, JSON.parse(await cachedText(tree.files['Budget.ymeta'])).relativeDataFolderName); tree = await syncFromDrive(folder.id); }
     await IDB.put('kv', 'tree', tree);
     await openBudget(treeIO(tree), 'drive');
     LS.set('lastSync', Date.now());
-    toast('Up to date with Google Drive');
+    toast(sent ? 'Sent ' + sent + ' to YNAB 4 — open YNAB 4 to see them' : 'Up to date with Google Drive');
   } catch (e) {
     S.error = e.message || String(e); toast(S.error);
   } finally { S.busy = false; S.status = ''; render(); }
 }
 async function boot() {
   dock.hidden = false;
+  await loadPending();
   const tree = await IDB.get('kv', 'tree').catch(() => null);
   if (tree) {
     try { await openBudget(treeIO(tree), 'cache'); } catch (e) { S.error = e.message; }
@@ -360,7 +461,7 @@ async function boot() {
 /* ================= rendering ================= */
 function go(v, extra) { S.view = v; if (extra) Object.assign(S, extra); render(); window.scrollTo(0, 0); }
 dock.addEventListener('click', (e) => { const b = e.target.closest('[data-go]'); if (b) go(b.dataset.go); });
-document.getElementById('addBtn').addEventListener('click', () => toast('Logging transactions comes in the next build. Reading works now.'));
+document.getElementById('addBtn').addEventListener('click', () => { if (!S.budget) { toast('Connect your budget first.'); return; } S.draft = null; go('add'); });
 let toastT;
 function toast(msg) {
   let t = document.querySelector('.toast'); if (!t) { t = document.createElement('div'); t.className = 'toast'; t.setAttribute('role', 'status'); document.body.appendChild(t); }
@@ -369,7 +470,8 @@ function toast(msg) {
 function syncChip() {
   const off = !navigator.onLine;
   const cls = S.busy ? 'busy' : off ? 'off' : '';
-  const text = S.busy ? (S.status || 'Syncing…') : off ? 'Offline' : lastSyncText();
+  const text = S.busy ? (S.status || 'Syncing…') : PENDING.length ? PENDING.length + ' to sync' : off ? 'Offline' : lastSyncText();
+  if (!S.busy && PENDING.length) return `<button class="chip off" id="chip" aria-label="Send waiting entries to YNAB 4"><i></i>${esc(text)}</button>`;
   return `<button class="chip ${cls}" id="chip" aria-label="Refresh from Google Drive"><i></i>${esc(text)}</button>`;
 }
 function renderChip() { const c = document.getElementById('chip'); if (c) c.outerHTML = syncChip(); bindChip(); }
@@ -398,7 +500,295 @@ function render() {
   else if (v === 'budget') app.innerHTML = viewBudget();
   else if (v === 'account') app.innerHTML = viewAccount();
   else if (v === 'sync') app.innerHTML = viewSync();
+  else if (v === 'add') { app.innerHTML = viewAdd(); bindAdd(); }
+  else if (v === 'import') { app.innerHTML = viewImport(); bindImport(); }
+  dock.hidden = v === 'add';
   bind();
+}
+
+/* ================= shared form helpers ================= */
+function categoryOptions(b, selected, withIncome) {
+  let h = '<option value="">Choose a category…</option>';
+  if (withIncome) h += `<optgroup label="Income"><option value="Category/__ImmediateIncome__" ${selected === 'Category/__ImmediateIncome__' ? 'selected' : ''}>Available this month</option><option value="Category/__DeferredIncome__" ${selected === 'Category/__DeferredIncome__' ? 'selected' : ''}>Available next month</option></optgroup>`;
+  b.masterCategories.forEach((mc) => {
+    if (mc.entityId === 'MasterCategory/__Hidden__') return;
+    const cats = (b.categoriesByMaster[mc.entityId] || []);
+    if (!cats.length) return;
+    h += `<optgroup label="${esc(mc.name)}">` + cats.map((c) => `<option value="${c.entityId}" ${c.entityId === selected ? 'selected' : ''}>${esc(c.name)}</option>`).join('') + '</optgroup>';
+  });
+  return h;
+}
+function accountOptions(b, selected, filter) {
+  return b.accountBalances().filter(filter || (() => true)).map((a) => `<option value="${a.id}" ${a.id === selected ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
+}
+function parseAmountInput(s) { const n = Number(String(s || '').replace(/[^\d]/g, '')); return isFinite(n) ? n : 0; }
+function catAvailable(b, cid) {
+  const mo = b.month(b.currentMonth());
+  for (const g of mo.groups) for (const c of g.categories) if (c.id === cid) return c.available;
+  return null;
+}
+function transferAccountFromPayee(b, name) {
+  const m = /^\s*transfer\s*:\s*(.+?)\s*$/i.exec(name || ''); if (!m) return null;
+  const want = m[1].toLowerCase();
+  const a = b.accountBalances().find((x) => x.name.toLowerCase() === want) || b.accountBalances().find((x) => x.name.toLowerCase().startsWith(want) || want.startsWith(x.name.toLowerCase()));
+  return a ? a.id : null;
+}
+
+/* ================= Add Transaction ================= */
+function newDraft() {
+  return { dir: 'out', amount: '', accountId: LS.get('lastAccount', null), payee: '', categoryId: '', catAuto: true, date: todayISO(), memo: '', cleared: false };
+}
+function viewAdd() {
+  const b = S.budget; const d = S.draft = S.draft || newDraft();
+  if (!d.accountId || !b.accountById[d.accountId]) { const cash = b.accountBalances().find((a) => /cash/i.test(a.name) && a.onBudget); d.accountId = (cash || b.accountBalances()[0]).id; }
+  const payees = [];
+  b.map.forEach((e) => { if (e.entityType === 'payee' && !e.isTombstone && e.enabled !== false && e.name && !/^Payee\/(Transfer|Starting)/.test(e.entityId) && !/^(Starting Balance|Reconciliation Balance)/.test(e.name)) payees.push(e.name); });
+  payees.sort((a, c) => a.localeCompare(c));
+  const transfers = b.accountBalances().filter((a) => a.id !== d.accountId).map((a) => 'Transfer : ' + a.name);
+  const recent = recentPayees(b, d.accountId);
+  return `
+  <div class="panel">
+    <div class="bar"><button class="iconbtn" data-go2="home" aria-label="Cancel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button><h1 class="emb" style="font-size:20px">Add Transaction</h1></div>
+    <div style="display:flex;padding:12px 14px 6px" role="group" aria-label="Outflow or inflow">
+      <button type="button" class="seg ${d.dir === 'out' ? 'on' : ''}" data-dir="out" style="border-radius:8px 0 0 8px">Outflow</button>
+      <button type="button" class="seg ${d.dir === 'in' ? 'on' : ''}" data-dir="in" style="border-radius:0 8px 8px 0;border-left:0">Inflow</button>
+    </div>
+    <label for="amt" class="emb" style="display:block;text-align:center;font-size:13px;font-weight:600;opacity:.85">Amount (Rp)</label>
+    <input id="amt" class="bigamt emb" inputmode="numeric" autocomplete="off" placeholder="0" value="${d.amount ? Number(d.amount).toLocaleString('id-ID') : ''}">
+  </div>
+  <form class="card" id="addForm" autocomplete="off">
+    <div class="fl"><label for="f-acct">ACCOUNT</label><select id="f-acct">${accountOptions(b, d.accountId)}</select></div>
+    <div class="fl"><label for="f-payee">PAYEE</label><input id="f-payee" list="payeeList" value="${esc(d.payee)}" placeholder="Who did you pay?"><datalist id="payeeList">${transfers.concat(payees).map((p) => `<option value="${esc(p)}">`).join('')}</datalist></div>
+    ${recent.length ? `<div class="chips">${recent.map((p) => `<button type="button" class="pchip" data-payee="${esc(p)}">${esc(p)}</button>`).join('')}</div>` : ''}
+    <div class="fl" id="catRow"><label for="f-cat">CATEGORY</label><select id="f-cat">${categoryOptions(b, d.categoryId, d.dir === 'in')}</select></div>
+    <div id="catHint" class="hint"></div>
+    <div class="fl"><label for="f-date">DATE</label><input id="f-date" type="date" value="${d.date}"></div>
+    <div class="fl"><label for="f-memo">MEMO</label><input id="f-memo" value="${esc(d.memo)}" placeholder="Optional"></div>
+    <div class="fl"><label for="f-clr">CLEARED</label><input id="f-clr" type="checkbox" ${d.cleared ? 'checked' : ''} style="width:24px;height:24px;justify-self:end"></div>
+  </form>
+  <div class="panel note emb"><span class="dot" style="background:${navigator.onLine ? 'var(--go-hi)' : 'var(--warn-hi)'}"></span><span>${navigator.onLine ? 'Saved on this phone first, then sent to YNAB 4 through Google Drive.' : 'Offline. Saved on this phone and sent to YNAB 4 when you are back online.'}</span></div>
+  <div class="actions"><button class="btn-lite" data-go2="home" style="flex:1;height:56px">Cancel</button><button class="btn-go" id="saveBtn" style="flex:2">Save</button></div>`;
+}
+function recentPayees(b, accountId) {
+  const seen = new Set(), out = [];
+  const rows = b.transactions.filter((t) => t.accountId === accountId && !t.transferTransactionId).sort((x, y) => (x.date < y.date ? 1 : -1));
+  for (const t of rows) { const p = b.payeeById[t.payeeId]; if (p && p.name && !seen.has(p.name) && !/Reconciliation|Starting/.test(p.name)) { seen.add(p.name); out.push(p.name); } if (out.length >= 6) break; }
+  return out;
+}
+function bindAdd() {
+  const b = S.budget, d = S.draft;
+  const $ = (id) => document.getElementById(id);
+  const amt = $('amt');
+  const updateHint = () => {
+    const tAcc = transferAccountFromPayee(b, d.payee);
+    const from = b.accountById[d.accountId], to = tAcc && b.accountById[tAcc];
+    const needCat = !tAcc || (!!from.onBudget !== !!to.onBudget);
+    $('catRow').style.display = needCat ? '' : 'none';
+    const h = $('catHint');
+    if (tAcc && !needCat) { h.textContent = 'Transfer between budget accounts — no category needed.'; return; }
+    if (!from.onBudget && !tAcc) { $('catRow').style.display = 'none'; h.textContent = 'Off-budget account — no category needed.'; return; }
+    const av = d.categoryId ? catAvailable(b, d.categoryId) : null;
+    if (av == null) { h.textContent = d.catAuto && d.categoryId ? '' : ''; return; }
+    const delta = (d.dir === 'out' ? -1 : 1) * parseAmountInput(d.amount);
+    h.innerHTML = `<span>${fmt(av)} → <b style="color:${av + delta < 0 ? 'var(--bad)' : '#2E7A12'}">${fmt(av + delta)}</b> left${d.catAuto && d.sugHow ? ' · suggested from your history' : ''}</span>`;
+  };
+  const suggest = () => {
+    if (!d.catAuto) return;
+    const s = b.suggestCategory(d.payee);
+    if (s && s.categoryId) { d.categoryId = s.categoryId; d.sugHow = s.how; $('f-cat').value = s.categoryId; }
+  };
+  amt.addEventListener('input', () => { const n = parseAmountInput(amt.value); d.amount = n ? String(n) : ''; amt.value = n ? n.toLocaleString('id-ID') : ''; updateHint(); });
+  document.querySelectorAll('[data-dir]').forEach((el) => el.onclick = () => { d.dir = el.dataset.dir; d.amount = d.amount; render(); });
+  $('f-acct').onchange = (e) => { d.accountId = e.target.value; render(); };
+  $('f-payee').addEventListener('input', (e) => { d.payee = e.target.value; suggest(); updateHint(); });
+  document.querySelectorAll('[data-payee]').forEach((el) => el.onclick = () => { d.payee = el.dataset.payee; $('f-payee').value = d.payee; suggest(); updateHint(); });
+  $('f-cat').onchange = (e) => { d.categoryId = e.target.value; d.catAuto = false; updateHint(); };
+  $('f-date').onchange = (e) => { d.date = e.target.value; };
+  $('f-memo').oninput = (e) => { d.memo = e.target.value; };
+  $('f-clr').onchange = (e) => { d.cleared = e.target.checked; };
+  $('addForm').onsubmit = (e) => e.preventDefault();
+  $('saveBtn').onclick = async () => {
+    const amount = parseAmountInput(d.amount);
+    if (!amount) { toast('Enter an amount.'); amt.focus(); return; }
+    if (!d.payee.trim()) { toast('Enter a payee, or pick "Transfer : …" for a transfer.'); $('f-payee').focus(); return; }
+    const tAcc = transferAccountFromPayee(b, d.payee);
+    if (/^\s*transfer\s*:/i.test(d.payee) && !tAcc) { toast('No account matches that transfer.'); return; }
+    if (tAcc === d.accountId) { toast('Pick a different account to transfer to.'); return; }
+    const from = b.accountById[d.accountId], to = tAcc && b.accountById[tAcc];
+    const needCat = from.onBudget && (!tAcc || !to.onBudget);
+    if (needCat && !d.categoryId) { toast('Choose a category.'); $('f-cat').focus(); return; }
+    if (!d.date) { toast('Choose a date.'); return; }
+    const entry = { accountId: d.accountId, date: d.date, amount: (d.dir === 'out' ? -1 : 1) * amount, memo: d.memo.trim() || null, cleared: d.cleared ? 'Cleared' : 'Uncleared' };
+    if (tAcc) { entry.transferAccountId = tAcc; if (needCat) entry.categoryId = d.categoryId; }
+    else { entry.payeeName = d.payee.trim(); if (needCat) entry.categoryId = d.categoryId; }
+    LS.set('lastAccount', d.accountId);
+    await addPending([entry]);
+    S.draft = null;
+    go('home');
+    if (navigator.onLine && Drive.valid()) refresh(false);
+    else toast(navigator.onLine ? 'Saved. Tap the yellow chip to send it to YNAB 4.' : 'Saved on this phone. It will be sent when you are online.');
+  };
+  updateHint();
+  if (!d.amount) setTimeout(() => amt.focus(), 50);
+}
+
+/* ================= Import (IndoYNAB / YNAB CSV) ================= */
+function parseCSV(text) {
+  const rows = []; let row = [], cur = '', q = false;
+  text = text.replace(/^﻿/, '');
+  const sep = (text.split(/\r?\n/)[0].match(/;/g) || []).length > (text.split(/\r?\n/)[0].match(/,/g) || []).length ? ';' : ',';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cur); cur = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cur); cur = ''; if (row.some((c) => c.trim() !== '')) rows.push(row); row = []; }
+    else cur += ch;
+  }
+  row.push(cur); if (row.some((c) => c.trim() !== '')) rows.push(row);
+  return rows;
+}
+function parseMoney(s) {
+  s = String(s || '').trim().replace(/rp\.?/i, '').replace(/\s/g, '');
+  if (!s) return 0;
+  let neg = /^\(.*\)$/.test(s) || s.startsWith('-') || s.endsWith('-');
+  s = s.replace(/[()+-]/g, '');
+  const lastDot = s.lastIndexOf('.'), lastComma = s.lastIndexOf(',');
+  if (lastDot >= 0 && lastComma >= 0) { const dec = lastDot > lastComma ? '.' : ','; s = s.split(dec === '.' ? ',' : '.').join(''); s = s.replace(dec, '.'); }
+  else if (lastDot >= 0) { if (/^\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, ''); }
+  else if (lastComma >= 0) { if (/^\d{1,3}(,\d{3})+$/.test(s)) s = s.replace(/,/g, ''); else s = s.replace(',', '.'); }
+  const n = Number(s); return isFinite(n) ? (neg ? -n : n) : NaN;
+}
+function parseDates(vals) {
+  // decide day-first vs month-first from the whole column; Indonesian statements are day-first
+  let dayFirst = true;
+  const slashy = vals.filter((v) => /^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4}$/.test(v.trim()));
+  if (slashy.some((v) => +v.split(/[\/.-]/)[1] > 12)) dayFirst = false;
+  if (slashy.some((v) => +v.split(/[\/.-]/)[0] > 12)) dayFirst = true;
+  return vals.map((v) => {
+    v = v.trim();
+    let m = /^(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/.exec(v);
+    if (m) return m[1] + '-' + m[2].padStart(2, '0') + '-' + m[3].padStart(2, '0');
+    m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})$/.exec(v);
+    if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; const dd = dayFirst ? m[1] : m[2], mm = dayFirst ? m[2] : m[1]; return y + '-' + mm.padStart(2, '0') + '-' + dd.padStart(2, '0'); }
+    return null;
+  });
+}
+function matchCategory(b, label) {
+  if (!label) return null;
+  const l = label.trim().toLowerCase();
+  if (/available this month|to be budgeted|^income\b/.test(l)) return /next month/.test(l) ? 'Category/__DeferredIncome__' : 'Category/__ImmediateIncome__';
+  const sub = l.includes(':') ? l.split(':').pop().trim() : l;
+  const master = l.includes(':') ? l.split(':')[0].trim() : null;
+  const all = Object.values(b.categoryById).filter((c) => !c.isTombstone);
+  const hits = all.filter((c) => c.name.toLowerCase() === sub);
+  if (hits.length > 1 && master) { const mm = hits.find((c) => { const mc = b.masterCategories.find((x) => x.entityId === c.masterCategoryId); return mc && mc.name.toLowerCase() === master; }); if (mm) return mm.entityId; }
+  return hits[0] ? hits[0].entityId : null;
+}
+function guessAccount(b, filename) {
+  const f = (filename || '').toLowerCase(), accts = b.accountBalances().filter((a) => a.onBudget);
+  if (/jago/.test(f)) return (accts.find((a) => /jago.*main/i.test(a.name)) || accts.find((a) => /jago/i.test(a.name)) || {}).id;
+  if (/muamalat/.test(f)) return (accts.find((a) => /muamalat/i.test(a.name)) || {}).id;
+  if (/gopay/.test(f)) return (accts.find((a) => /gopay/i.test(a.name)) || {}).id;
+  return null;
+}
+function buildImportRows(b, text, accountId) {
+  const rows = parseCSV(text);
+  if (rows.length < 2) throw new Error('That file has no transactions.');
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (...names) => head.findIndex((h) => names.includes(h));
+  const iDate = col('date', 'tanggal'), iPayee = col('payee', 'description', 'keterangan'), iCat = col('category', 'kategori'), iMemo = col('memo', 'notes', 'catatan');
+  const iAmt = col('amount', 'jumlah', 'nominal'), iOut = col('outflow', 'debit'), iIn = col('inflow', 'credit', 'kredit');
+  if (iDate < 0 || (iAmt < 0 && iOut < 0 && iIn < 0)) throw new Error('Could not find Date and Amount columns. Export the CSV from IndoYNAB and try again.');
+  const body = rows.slice(1);
+  const dates = parseDates(body.map((r) => r[iDate] || ''));
+  const used = new Set();
+  return body.map((r, i) => {
+    const amount = iAmt >= 0 ? parseMoney(r[iAmt]) : (parseMoney(r[iIn]) || 0) - Math.abs(parseMoney(r[iOut]) || 0);
+    const payee = (iPayee >= 0 ? r[iPayee] : '').trim();
+    const memo = (iMemo >= 0 ? r[iMemo] : '').trim();
+    const row = { n: i + 1, date: dates[i], payee, memo, amount: Math.round(amount), problem: null };
+    if (!row.date) row.problem = 'Date not understood: ' + (r[iDate] || '');
+    else if (!isFinite(amount) || !amount) row.problem = 'Amount not understood';
+    row.transferAccountId = transferAccountFromPayee(b, payee);
+    if (/^\s*transfer\s*:/i.test(payee) && !row.transferAccountId) row.problem = 'No account matches "' + payee + '"';
+    const fromCsv = iCat >= 0 ? matchCategory(b, r[iCat]) : null;
+    const sug = fromCsv ? null : b.suggestCategory(payee);
+    row.categoryId = fromCsv || (sug && sug.categoryId) || '';
+    row.catSource = fromCsv ? 'csv' : sug ? 'history' : null;
+    if (!row.problem && accountId) {
+      // already in the budget? same account, same amount, within 3 days — and not already matched by another row
+      const cands = b.transactions.filter((t) => t.accountId === accountId && Math.round(t.amount) === row.amount && !used.has(t.entityId) && Math.abs(Date.parse(t.date) - Date.parse(row.date)) <= 3 * 86400000);
+      cands.sort((x, y) => Math.abs(Date.parse(x.date) - Date.parse(row.date)) - Math.abs(Date.parse(y.date) - Date.parse(row.date)));
+      if (cands[0]) { used.add(cands[0].entityId); row.dup = cands[0]; }
+    }
+    row.include = !row.problem && !row.dup;
+    return row;
+  });
+}
+function viewImport() {
+  const b = S.budget, I = S.imp = S.imp || { rows: null, accountId: null, file: '' };
+  const accts = b.accountBalances().filter((a) => !a.hidden);
+  const rows = I.rows || [];
+  const nNew = rows.filter((r) => r.include).length, nDup = rows.filter((r) => r.dup).length, nBad = rows.filter((r) => r.problem).length;
+  const needCat = (r) => { if (!I.accountId) return false; if (r.transferAccountId) { const f = b.accountById[I.accountId], t = b.accountById[r.transferAccountId]; return f.onBudget && !t.onBudget; } return b.accountById[I.accountId] && b.accountById[I.accountId].onBudget; };
+  const missingCat = rows.filter((r) => r.include && needCat(r) && !r.categoryId).length;
+  return `
+  <div class="panel">
+    <div class="bar">${ICON.tag}<h1 class="emb">Import Statement</h1>${syncChip()}</div>
+    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Pick the CSV you downloaded from IndoYNAB. Rows already in your budget are skipped, and categories are suggested from your own history.</span></div>
+  </div>
+  <div class="card form">
+    <div><label for="imp-file">STATEMENT CSV</label><input id="imp-file" type="file" accept=".csv,text/csv,text/plain" style="height:auto;padding:10px;border:1px dashed #9DB6C8"></div>
+    <div><label for="imp-acct">INTO ACCOUNT</label><select id="imp-acct" class="sel"><option value="">Choose the account…</option>${accountOptions(b, I.accountId, (a) => !a.hidden)}</select></div>
+    ${I.file ? `<p>${esc(I.file)} · ${rows.length} rows</p>` : ''}
+  </div>
+  ${I.rows ? `
+  <div class="panel" style="padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap">
+    <span class="pill g">${nNew} new</span><span class="pill z">${nDup} already in budget</span>${nBad ? `<span class="pill r">${nBad} not readable</span>` : ''}${missingCat ? `<span class="pill o">${missingCat} need a category</span>` : ''}
+  </div>
+  <div class="card">
+    ${rows.map((r, i) => {
+      const nc = needCat(r);
+      return `<div class="imp ${r.include ? '' : 'off'}">
+        <input type="checkbox" id="inc-${i}" data-inc="${i}" ${r.include ? 'checked' : ''} ${r.problem ? 'disabled' : ''} aria-label="Import row ${r.n}">
+        <div style="min-width:0">
+          <label for="inc-${i}"><b>${esc(r.payee || '(no payee)')}</b></label>
+          <span class="c">${r.date ? dm(r.date) : '—'}${r.memo ? ' · ' + esc(r.memo) : ''}</span>
+          ${r.problem ? `<span class="c" style="color:var(--bad)">${esc(r.problem)}</span>` : r.dup ? `<span class="c">Already in budget: ${esc((b.payeeById[r.dup.payeeId] || {}).name || '')} ${dm(r.dup.date)}</span>` : r.transferAccountId && !nc ? '<span class="c">Transfer — no category needed</span>' : nc ? `<select class="rowcat ${r.categoryId ? '' : 'need'}" data-cat="${i}" aria-label="Category for ${esc(r.payee)}">${categoryOptions(b, r.categoryId, r.amount > 0)}</select>${r.catSource === 'history' ? '<span class="c">suggested from your history</span>' : ''}` : ''}
+        </div>
+        <span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>
+      </div>`;
+    }).join('')}
+  </div>
+  <button class="btn-go" id="impBtn" ${nNew && !missingCat && I.accountId ? '' : 'disabled'}>${!I.accountId ? 'Choose the account first' : missingCat ? 'Pick categories for ' + missingCat + ' rows' : 'Import ' + nNew + ' into YNAB 4'}</button>` : ''}`;
+}
+function bindImport() {
+  const b = S.budget, I = S.imp;
+  const rebuild = () => { if (I.text) { try { I.rows = buildImportRows(b, I.text, I.accountId); } catch (e) { I.rows = null; toast(e.message); } } render(); };
+  document.getElementById('imp-file').onchange = async (e) => {
+    const f = e.target.files[0]; if (!f) return;
+    I.text = await f.text(); I.file = f.name;
+    I.accountId = I.accountId || guessAccount(b, f.name) || null;
+    rebuild();
+  };
+  document.getElementById('imp-acct').onchange = (e) => { I.accountId = e.target.value || null; rebuild(); };
+  document.querySelectorAll('[data-inc]').forEach((el) => el.onchange = () => { I.rows[+el.dataset.inc].include = el.checked; render(); });
+  document.querySelectorAll('[data-cat]').forEach((el) => el.onchange = () => { const r = I.rows[+el.dataset.cat]; r.categoryId = el.value; r.catSource = 'you'; render(); });
+  const btn = document.getElementById('impBtn');
+  if (btn) btn.onclick = async () => {
+    const acc = b.accountById[I.accountId];
+    const entries = I.rows.filter((r) => r.include).map((r) => {
+      const e = { accountId: I.accountId, date: r.date, amount: r.amount, memo: r.memo || null, cleared: 'Cleared', source: 'Imported', importedPayee: r.payee || null };
+      if (r.transferAccountId) { e.transferAccountId = r.transferAccountId; const t = b.accountById[r.transferAccountId]; if (acc.onBudget && !t.onBudget) e.categoryId = r.categoryId; }
+      else { e.payeeName = r.payee || 'Unknown'; if (acc.onBudget) e.categoryId = r.categoryId; }
+      return e;
+    });
+    await addPending(entries);
+    const n = entries.length; S.imp = null;
+    go('home');
+    if (navigator.onLine && Drive.valid()) refresh(false); else toast(n + ' saved on this phone. Tap the yellow chip to send them to YNAB 4.');
+  };
 }
 
 function viewWelcome() {
@@ -482,7 +872,7 @@ function viewAccount() {
   </div>
   <div class="card">
     <div class="reg" style="padding:6px 12px;font-size:11px;font-weight:700;letter-spacing:.06em;color:var(--muted);background:var(--band)"><span>DATE</span><span>PAYEE · CATEGORY</span><span style="text-align:right">AMOUNT</span><span></span></div>
-    ${shown.map((r) => `<div class="reg"><span class="d">${dm(r.date)}</span><span style="min-width:0"><b>${esc(r.payee || '—')}</b><span class="c">${esc([r.category, r.memo].filter(Boolean).join(' · '))}</span></span><span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>${r.cleared === 'Reconciled' ? ICON.lock : r.cleared === 'Cleared' ? '<span class="cl C" title="Cleared">C</span>' : '<span class="cl U" title="Uncleared"></span>'}</div>`).join('') || '<div class="reg"><span></span><span>No transactions</span></div>'}
+    ${shown.map((r) => { const pend = b.pendingIds && b.pendingIds[r.id]; return `<div class="reg ${pend ? 'pend' : ''}"><span class="d">${dm(r.date)}</span><span style="min-width:0"><b>${esc(r.payee || '—')}</b><span class="c">${esc([pend ? 'waiting to sync' : '', r.category, r.memo].filter(Boolean).join(' · '))}</span></span><span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>${r.cleared === 'Reconciled' ? ICON.lock : r.cleared === 'Cleared' ? '<span class="cl C" title="Cleared">C</span>' : '<span class="cl U" title="Uncleared"></span>'}</div>`; }).join('') || '<div class="reg"><span></span><span>No transactions</span></div>'}
     ${rows.length > S.regLimit ? `<button class="more" data-more="1">Show more (${rows.length - S.regLimit} older)</button>` : ''}
   </div>`;
 }
@@ -494,8 +884,15 @@ function viewSync() {
   return `
   <div class="panel">
     <div class="bar">${ICON.tag}<h1 class="emb">Sync &amp; Settings</h1>${syncChip()}</div>
-    <div class="note emb"><span class="dot" style="background:${navigator.onLine ? 'var(--go-hi)' : 'var(--warn-hi)'}"></span><span>${navigator.onLine ? 'Online.' : 'Offline. You can still read the budget saved on this phone.'} This build reads your budget. Logging transactions comes next.</span></div>
+    <div class="note emb"><span class="dot" style="background:${navigator.onLine ? 'var(--go-hi)' : 'var(--warn-hi)'}"></span><span>${navigator.onLine ? 'Online.' : 'Offline. You can still read and add — entries wait on this phone.'} Close YNAB 4 on your computer before sending, then open it to see the new entries.</span></div>
   </div>
+  ${PENDING.length ? `<div class="card">
+    <div class="line head" style="grid-template-columns:1fr"><span>WAITING TO SYNC (${PENDING.length})</span></div>
+    ${PENDING.map((p) => { const e = p.entry, a = b && b.accountById[e.accountId], to = e.transferAccountId && b && b.accountById[e.transferAccountId];
+      const cat = e.categoryId && b ? ((b.categoryById[e.categoryId] || {}).name || (/Income/.test(e.categoryId) ? 'Income' : '')) : '';
+      return `<div class="reg pend" style="grid-template-columns:50px minmax(0,1fr) auto 32px"><span class="d">${dm(e.date)}</span><span style="min-width:0"><b>${esc(to ? 'Transfer : ' + to.accountName : e.payeeName || '')}</b><span class="c">${esc([a && a.accountName, cat, e.memo].filter(Boolean).join(' · '))}</span></span><span class="amt ${e.amount > 0 ? 'in' : ''}">${e.amount > 0 ? '+' : ''}${fmt(e.amount)}</span><button class="iconbtn" style="margin:0;width:32px;height:32px;color:var(--bad)" data-unpend="${p.id}" aria-label="Remove this waiting entry"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>`; }).join('')}
+    <button class="more" data-act="refresh">Send ${PENDING.length} to YNAB 4 now</button>
+  </div>` : ''}
   <div class="card">
     <div class="line head" style="grid-template-columns:1fr"><span>CONNECTION</span></div>
     <div class="kv"><span>Budget</span><b>${folder ? esc(folder.name) : 'Not chosen'}</b></div>
@@ -532,6 +929,7 @@ function bind() {
   app.querySelectorAll('[data-allcats]').forEach((el) => el.onclick = () => { LS.set('showEmpty', !LS.get('showEmpty', false)); render(); });
   app.querySelectorAll('[data-more]').forEach((el) => el.onclick = () => { S.regLimit += 100; render(); });
   app.querySelectorAll('[data-act]').forEach((el) => el.onclick = () => act(el.dataset.act));
+  app.querySelectorAll('[data-unpend]').forEach((el) => el.onclick = async () => { PENDING = PENDING.filter((p) => p.id !== el.dataset.unpend); await savePending(); applyPending(); render(); toast('Removed'); });
   const f = document.getElementById('settings');
   if (f) f.onsubmit = (e) => { e.preventDefault(); LS.set('clientId', f.clientId.value.trim()); LS.set('payday', Math.min(28, Math.max(1, +f.payday.value || 15))); toast('Settings saved'); render(); };
 }

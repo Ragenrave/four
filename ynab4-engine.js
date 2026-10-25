@@ -300,7 +300,154 @@
     return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
   };
 
-  var api = { load: load, parseKnowledge: parseKnowledge, knowledgeToString: knowledgeToString, knows: knows, flatten: flatten, Budget: Budget, addMonths: addMonths };
+  // ---------- writing (the phone as its own YNAB 4 device) ----------
+  function guid() {
+    var h = '0123456789ABCDEF', s = '';
+    var c = (typeof crypto !== 'undefined' && crypto.getRandomValues) ? crypto.getRandomValues(new Uint8Array(16)) : Array.from({ length: 16 }, function () { return Math.floor(Math.random() * 256); });
+    for (var i = 0; i < 16; i++) { s += h[c[i] >> 4] + h[c[i] & 15]; if (i === 3 || i === 5 || i === 7 || i === 9) s += '-'; }
+    return s;
+  }
+  function publishTime(d) {
+    d = d || new Date();
+    var days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'], mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    var p = function (n) { return String(n).padStart(2, '0'); };
+    var off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-'; off = Math.abs(off);
+    return days[d.getDay()] + ' ' + mons[d.getMonth()] + ' ' + p(d.getDate()) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + ' GMT' + sign + p(Math.floor(off / 60)) + p(off % 60) + ' ' + d.getFullYear();
+  }
+  // Pick a free short id for a new device (C, D, …)
+  function nextDeviceId(budget) {
+    var used = {};
+    budget.info.devices.forEach(function (d) { used[d.shortDeviceId] = 1; });
+    var abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (var i = 0; i < abc.length; i++) if (!used[abc[i]]) return abc[i];
+    throw new Error('No free device letters left in this budget.');
+  }
+
+  // Turn simple entries into YNAB 4 entities.
+  // entry: { accountId, date:'YYYY-MM-DD', amount (negative = outflow), payeeName?, payeeId?, categoryId?, memo?,
+  //          transferAccountId?, cleared?, importedPayee?, source? }
+  function entitiesFor(budget, entries) {
+    var out = [], newPayees = {};
+    var payeeByName = {};
+    budget.map.forEach(function (e) { if (e.entityType === 'payee' && !e.isTombstone && e.name) payeeByName[e.name.toLowerCase()] = e; });
+    entries.forEach(function (en) {
+      var acc = budget.accountById[en.accountId];
+      if (!acc) throw new Error('Unknown account for entry: ' + en.accountId);
+      var id = guid();
+      var base = {
+        isTombstone: false, madeWithKnowledge: null, isResolvedConflict: false,
+        amount: Math.round(en.amount), memo: en.memo || null, cleared: en.cleared || 'Uncleared', date: en.date,
+        dateEnteredFromSchedule: null, checkNumber: null, flag: null, targetAccountId: null, transferTransactionId: null,
+        importedPayee: en.importedPayee || null, categoryId: null, source: en.source || null, entityId: id, entityType: 'transaction',
+        YNABID: null, subTransactions: null, FITID: null, matchedTransactions: null, parentTransactionIdIfMatched: null,
+        accountId: en.accountId, accepted: true, payeeId: null
+      };
+      if (en.transferAccountId) {
+        var to = budget.accountById[en.transferAccountId];
+        if (!to) throw new Error('Unknown transfer account: ' + en.transferAccountId);
+        var needsCat = !!acc.onBudget !== !!to.onBudget; // on-budget ↔ off-budget transfers carry a category on the on-budget side
+        var a = Object.assign({}, base, { targetAccountId: to.entityId, transferTransactionId: id + '_T_0', payeeId: 'Payee/Transfer:' + to.entityId,
+          categoryId: needsCat && acc.onBudget ? (en.categoryId || null) : null });
+        var b = Object.assign({}, base, { entityId: id + '_T_0', accountId: to.entityId, amount: -a.amount, targetAccountId: acc.entityId, transferTransactionId: id,
+          payeeId: 'Payee/Transfer:' + acc.entityId, importedPayee: null, source: null, categoryId: needsCat && to.onBudget ? (en.categoryId || null) : null });
+        out.push(a, b);
+        return;
+      }
+      var payeeId = en.payeeId || null;
+      if (!payeeId && en.payeeName) {
+        var key = en.payeeName.trim().toLowerCase();
+        var hit = payeeByName[key] || newPayees[key];
+        if (hit) payeeId = hit.entityId;
+        else {
+          var p = { locations: null, entityId: guid(), entityType: 'payee', isTombstone: false, madeWithKnowledge: null, isResolvedConflict: false,
+            name: en.payeeName.trim(), enabled: true, autoFillCategoryId: en.categoryId || null, autoFillMemo: '', autoFillAmount: Math.round(en.amount), renameConditions: null, targetAccountId: null };
+          newPayees[key] = p; out.push(p); payeeId = p.entityId;
+        }
+      }
+      out.push(Object.assign({}, base, { payeeId: payeeId, categoryId: en.categoryId || null }));
+    });
+    return out;
+  }
+
+  // Build the files a device publishes: one change file plus its updated device record.
+  // device: { shortId, guid, friendlyName, version (last number used, 0 if new) }
+  function buildDiff(budget, device, items, when) {
+    var known = Object.assign({}, budget.info.knowledge);
+    var startK = Object.assign({}, known);
+    if (device.version > 0) startK[device.shortId] = device.version; else delete startK[device.shortId];
+    var v = device.version;
+    var stamped = items.map(function (it) { v += 1; return Object.assign({}, it, { entityVersion: device.shortId + '-' + v }); });
+    var endK = Object.assign({}, startK); endK[device.shortId] = v;
+    var startStr = knowledgeToString(startK), endStr = knowledgeToString(endK);
+    var diff = {
+      budgetDataGUID: null, dataVersion: '4.2', startVersion: startStr, endVersion: endStr,
+      items: stamped, publishTime: publishTime(when), deviceGUID: device.guid, shortDeviceId: device.shortId, formatVersion: null
+    };
+    var deviceFile = {
+      knowledge: endStr, knowledgeInFullBudgetFile: null,
+      YNABVersion: 'Classic Four 1.0 (phone companion)', hasFullKnowledge: false, lastDataVersionFullyKnown: '4.2',
+      deviceType: 'Classic Four (Android web app)', highestDataVersionImported: null,
+      friendlyName: device.friendlyName || 'Phone (Classic Four)', deviceGUID: device.guid, shortDeviceId: device.shortId, formatVersion: '1.2'
+    };
+    return {
+      diffName: startStr + '_' + device.shortId + '-' + v + '.ydiff',
+      diffText: JSON.stringify(diff, null, '\t'),
+      deviceName: device.shortId + '.ydevice',
+      deviceText: JSON.stringify(deviceFile, null, '\t'),
+      newVersion: v, items: stamped
+    };
+  }
+
+  // A copy of the budget with extra (not yet published) entities applied on top.
+  Budget.prototype.withItems = function (items) {
+    if (!items || !items.length) return this;
+    var m = new Map(this.map);
+    items.forEach(function (it) { applyItem(m, it); });
+    var b = new Budget(m, this.info);
+    b.pendingIds = {};
+    items.forEach(function (it) { b.pendingIds[it.entityId] = 1; });
+    return b;
+  };
+
+  // Duplicate check: same account, same amount, within `days` days.
+  Budget.prototype.findMatch = function (accountId, date, amount, days) {
+    days = days == null ? 3 : days;
+    var t0 = Date.parse(date + 'T00:00:00Z'), best = null;
+    for (var i = 0; i < this.transactions.length; i++) {
+      var t = this.transactions[i];
+      if (t.accountId !== accountId || Math.round(t.amount) !== Math.round(amount)) continue;
+      var dd = Math.abs(Date.parse(t.date + 'T00:00:00Z') - t0) / 86400000;
+      if (dd <= days && (!best || dd < best.dd)) best = { dd: dd, tx: t };
+    }
+    return best && best.tx;
+  };
+  // Category most often used with a payee (by payee name or bank text), for suggestions.
+  Budget.prototype.payeeStats = function () {
+    if (this._pstats) return this._pstats;
+    var self = this, byPayee = {}, byImported = {};
+    this.transactions.forEach(function (t) {
+      if (!t.categoryId || !self.categoryById[t.categoryId]) return;
+      var p = self.payeeById[t.payeeId];
+      if (p && p.name) { var k = p.name.toLowerCase(); (byPayee[k] = byPayee[k] || {})[t.categoryId] = ((byPayee[k] || {})[t.categoryId] || 0) + 1; }
+      if (t.importedPayee) { var k2 = t.importedPayee.toLowerCase(); (byImported[k2] = byImported[k2] || {})[t.categoryId] = ((byImported[k2] || {})[t.categoryId] || 0) + 1; }
+    });
+    var top = function (m) { var o = {}; Object.keys(m).forEach(function (k) { var best = null; Object.keys(m[k]).forEach(function (c) { if (!best || m[k][c] > m[k][best]) best = c; }); o[k] = { categoryId: best, n: m[k][best], total: Object.values(m[k]).reduce(function (a, b) { return a + b; }, 0) }; }); return o; };
+    this._pstats = { payee: top(byPayee), imported: top(byImported) };
+    return this._pstats;
+  };
+  Budget.prototype.suggestCategory = function (name) {
+    if (!name) return null;
+    var s = this.payeeStats(), k = name.toLowerCase();
+    var hit = s.imported[k] || s.payee[k];
+    if (hit) return Object.assign({ how: 'exact' }, hit);
+    // payee text that starts with or contains a known payee name
+    var best = null;
+    Object.keys(s.payee).forEach(function (p) { if (p.length >= 4 && (k.indexOf(p) >= 0 || p.indexOf(k) >= 0) && (!best || p.length > best.p.length)) best = { p: p, v: s.payee[p] }; });
+    return best ? Object.assign({ how: 'similar' }, best.v) : null;
+  };
+
+  var api = { load: load, parseKnowledge: parseKnowledge, knowledgeToString: knowledgeToString, knows: knows, flatten: flatten, Budget: Budget, addMonths: addMonths,
+    guid: guid, nextDeviceId: nextDeviceId, entitiesFor: entitiesFor, buildDiff: buildDiff, publishTime: publishTime };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.YNAB4 = api;
 })(typeof window !== 'undefined' ? window : globalThis);
