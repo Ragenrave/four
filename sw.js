@@ -1,6 +1,6 @@
 // Classic Four offline worker: keeps the app itself available offline.
 // Budget data is stored separately in IndexedDB by the page.
-const CACHE = 'four-app-v1';
+const CACHE = 'four-app-v2';
 const APP = ['./', 'index.html', 'ynab4-engine.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
