@@ -164,6 +164,7 @@ a{color:inherit}
 <input type="file" id="dirPick" webkitdirectory directory multiple hidden>
 
 <script src="ynab4-engine.js"></script>
+<script src="statements.js"></script>
 <script>
 'use strict';
 /* ================= storage ================= */
@@ -456,6 +457,19 @@ async function boot() {
   if (!S.budget) { S.view = LS.get('folder', null) ? 'home' : 'welcome'; }
   render();
   if (LS.get('folder', null) && navigator.onLine && LS.get('clientId', DEFAULT_CLIENT_ID) && Drive.valid()) refresh(false);
+  if (/[?&]shared=1/.test(location.search)) takeSharedStatement();
+}
+async function takeSharedStatement() {
+  history.replaceState(null, '', location.pathname);
+  try {
+    const c = await caches.open('four-share'), r = await c.match('shared-statement');
+    if (!r) return;
+    await c.delete('shared-statement');
+    if (!S.budget) { toast('Connect your budget first, then share the statement again.'); return; }
+    const name = decodeURIComponent(r.headers.get('X-File-Name') || 'statement.pdf');
+    const blob = await r.blob();
+    importFile(new File([blob], name, { type: blob.type }));
+  } catch (e) { toast('Could not open the shared statement.'); }
 }
 
 /* ================= rendering ================= */
@@ -685,96 +699,187 @@ function matchCategory(b, label) {
   if (hits.length > 1 && master) { const mm = hits.find((c) => { const mc = b.masterCategories.find((x) => x.entityId === c.masterCategoryId); return mc && mc.name.toLowerCase() === master; }); if (mm) return mm.entityId; }
   return hits[0] ? hits[0].entityId : null;
 }
-function guessAccount(b, filename) {
-  const f = (filename || '').toLowerCase(), accts = b.accountBalances().filter((a) => a.onBudget);
+function guessAccount(b, filename, bank) {
+  const f = ((filename || '') + ' ' + (bank || '')).toLowerCase(), accts = b.accountBalances().filter((a) => a.onBudget);
   if (/jago/.test(f)) return (accts.find((a) => /jago.*main/i.test(a.name)) || accts.find((a) => /jago/i.test(a.name)) || {}).id;
   if (/muamalat/.test(f)) return (accts.find((a) => /muamalat/i.test(a.name)) || {}).id;
   if (/gopay/.test(f)) return (accts.find((a) => /gopay/i.test(a.name)) || {}).id;
   return null;
 }
-function buildImportRows(b, text, accountId) {
+function ownNames() { return LS.get('ownNames', ['aditya priansyah']); }
+// IndoYNAB's categoriser, trained on the whole published budget (cached until the budget changes)
+function statementModel() {
+  if (!S.model || S.model.base !== S.base) S.model = { base: S.base, m: Statements.modelFromBudget(S.base) };
+  return S.model.m;
+}
+let pdfP;
+function loadPdfJs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  pdfP = pdfP || new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = () => { pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; res(); };
+    s.onerror = () => { pdfP = null; rej(new Error('Could not load the PDF reader. Check your internet connection and try again.')); };
+    document.head.appendChild(s);
+  });
+  return pdfP;
+}
+// Rows from an IndoYNAB / YNAB-style CSV
+function rowsFromCSV(b, text) {
   const rows = parseCSV(text);
   if (rows.length < 2) throw new Error('That file has no transactions.');
   const head = rows[0].map((h) => h.trim().toLowerCase());
   const col = (...names) => head.findIndex((h) => names.includes(h));
   const iDate = col('date', 'tanggal'), iPayee = col('payee', 'description', 'keterangan'), iCat = col('category', 'kategori'), iMemo = col('memo', 'notes', 'catatan');
   const iAmt = col('amount', 'jumlah', 'nominal'), iOut = col('outflow', 'debit'), iIn = col('inflow', 'credit', 'kredit');
-  if (iDate < 0 || (iAmt < 0 && iOut < 0 && iIn < 0)) throw new Error('Could not find Date and Amount columns. Export the CSV from IndoYNAB and try again.');
+  if (iDate < 0 || (iAmt < 0 && iOut < 0 && iIn < 0)) throw new Error('Could not find Date and Amount columns in this CSV.');
   const body = rows.slice(1);
   const dates = parseDates(body.map((r) => r[iDate] || ''));
-  const used = new Set();
   return body.map((r, i) => {
     const amount = iAmt >= 0 ? parseMoney(r[iAmt]) : (parseMoney(r[iIn]) || 0) - Math.abs(parseMoney(r[iOut]) || 0);
     const payee = (iPayee >= 0 ? r[iPayee] : '').trim();
-    const memo = (iMemo >= 0 ? r[iMemo] : '').trim();
-    const row = { n: i + 1, date: dates[i], payee, memo, amount: Math.round(amount), problem: null };
+    const row = { n: i + 1, date: dates[i], payee, memo: (iMemo >= 0 ? r[iMemo] : '').trim(), amount: Math.round(amount), problem: null };
     if (!row.date) row.problem = 'Date not understood: ' + (r[iDate] || '');
     else if (!isFinite(amount) || !amount) row.problem = 'Amount not understood';
     row.transferAccountId = transferAccountFromPayee(b, payee);
     if (/^\s*transfer\s*:/i.test(payee) && !row.transferAccountId) row.problem = 'No account matches "' + payee + '"';
     const fromCsv = iCat >= 0 ? matchCategory(b, r[iCat]) : null;
-    const sug = fromCsv ? null : b.suggestCategory(payee);
+    const sug = fromCsv || row.transferAccountId ? null : b.suggestCategory(payee);
     row.categoryId = fromCsv || (sug && sug.categoryId) || '';
     row.catSource = fromCsv ? 'csv' : sug ? 'history' : null;
+    return row;
+  });
+}
+// Rows from a Bank Jago / Bank Muamalat PDF, categorised by IndoYNAB's model + your notes
+function rowsFromStatement(b, st) {
+  const model = statementModel();
+  return st.txs.map((t, i) => {
+    const row = { n: i + 1, date: t.date, payee: t.payee || '', memo: t.memo || '', amount: Math.round(t.amount), problem: null, categoryId: '', catSource: null };
+    if (!t.date || !isFinite(t.amount)) row.problem = 'Row not readable';
+    const tr = Statements.detectTransfer(t.payee, t.memo, t.amount, st.bank, model, ownNames());
+    if (tr) {
+      row.transferAccountId = transferAccountFromPayee(b, tr.payee);
+      if (!row.transferAccountId) row.transferHint = true; // looks like a transfer, account unknown: let him pick
+    }
+    if (!row.transferAccountId) {
+      const note = Statements.categoryFromNote(t.notes, b);
+      if (note) { row.categoryId = note; row.catSource = 'note'; }
+      else if (!row.transferHint) {
+        const c = Statements.categorize(t.payee, t.memo, t.amount, model, t.escrowAccount);
+        if (c.category) { row.categoryId = c.category; row.catSource = c.confidence === 'high' ? 'history' : 'guess'; }
+      }
+    }
+    return row;
+  });
+}
+// Mark rows already in the budget (same account, same amount, within 3 days) and set what to import
+function finalizeRows(b, rows, accountId) {
+  const used = new Set();
+  rows.forEach((row) => {
+    row.dup = null;
     if (!row.problem && accountId) {
-      // already in the budget? same account, same amount, within 3 days — and not already matched by another row
       const cands = b.transactions.filter((t) => t.accountId === accountId && Math.round(t.amount) === row.amount && !used.has(t.entityId) && Math.abs(Date.parse(t.date) - Date.parse(row.date)) <= 3 * 86400000);
       cands.sort((x, y) => Math.abs(Date.parse(x.date) - Date.parse(row.date)) - Math.abs(Date.parse(y.date) - Date.parse(row.date)));
       if (cands[0]) { used.add(cands[0].entityId); row.dup = cands[0]; }
     }
-    row.include = !row.problem && !row.dup;
-    return row;
+    if (row.transferAccountId === accountId) row.transferAccountId = null;
+    if (!row.userTouched) row.include = !row.problem && !row.dup;
   });
+  return rows;
+}
+function rowChoice(b, r, accountId) {
+  // one select: a category, or a transfer to another of your accounts
+  const acc = b.accountById[accountId];
+  let h = acc && acc.onBudget ? categoryOptions(b, r.transferAccountId ? '' : r.categoryId, r.amount > 0) : '<option value="">No category (off-budget account)</option>';
+  h += '<optgroup label="Transfer to / from">' + b.accountBalances().filter((a) => a.id !== accountId && !a.hidden).map((a) => `<option value="transfer:${a.id}" ${r.transferAccountId === a.id ? 'selected' : ''}>Transfer : ${esc(a.name)}</option>`).join('') + '</optgroup>';
+  return h;
 }
 function viewImport() {
   const b = S.budget, I = S.imp = S.imp || { rows: null, accountId: null, file: '' };
-  const accts = b.accountBalances().filter((a) => !a.hidden);
   const rows = I.rows || [];
   const nNew = rows.filter((r) => r.include).length, nDup = rows.filter((r) => r.dup).length, nBad = rows.filter((r) => r.problem).length;
-  const needCat = (r) => { if (!I.accountId) return false; if (r.transferAccountId) { const f = b.accountById[I.accountId], t = b.accountById[r.transferAccountId]; return f.onBudget && !t.onBudget; } return b.accountById[I.accountId] && b.accountById[I.accountId].onBudget; };
-  const missingCat = rows.filter((r) => r.include && needCat(r) && !r.categoryId).length;
+  const needCat = (r) => {
+    if (!I.accountId) return false;
+    const f = b.accountById[I.accountId];
+    if (r.transferAccountId) { const t = b.accountById[r.transferAccountId]; return f.onBudget && !t.onBudget; }
+    return !!f.onBudget;
+  };
+  const missing = rows.filter((r) => r.include && needCat(r) && !r.categoryId).length;
+  const st = I.statement;
+  const srcNote = { note: 'from your note', history: 'from your history', guess: 'best guess — check', csv: 'from the CSV', you: '' };
   return `
   <div class="panel">
     <div class="bar">${ICON.tag}<h1 class="emb">Import Statement</h1>${syncChip()}</div>
-    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Pick the CSV you downloaded from IndoYNAB. Rows already in your budget are skipped, and categories are suggested from your own history.</span></div>
+    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Share or pick a Bank Jago or Bank Muamalat PDF (an IndoYNAB CSV works too). Rows already in YNAB 4 are skipped, and categories come from your notes and your own history.</span></div>
   </div>
   <div class="card form">
-    <div><label for="imp-file">STATEMENT CSV</label><input id="imp-file" type="file" accept=".csv,text/csv,text/plain" style="height:auto;padding:10px;border:1px dashed #9DB6C8"></div>
+    <div><label for="imp-file">STATEMENT (PDF OR CSV)</label><input id="imp-file" type="file" accept=".pdf,.csv,application/pdf,text/csv,text/plain" style="height:auto;padding:10px;border:1px dashed #9DB6C8"></div>
     <div><label for="imp-acct">INTO ACCOUNT</label><select id="imp-acct" class="sel"><option value="">Choose the account…</option>${accountOptions(b, I.accountId, (a) => !a.hidden)}</select></div>
-    ${I.file ? `<p>${esc(I.file)} · ${rows.length} rows</p>` : ''}
+    ${I.busy ? `<p>Reading ${esc(I.file)}…</p>` : I.file ? `<p>${esc(I.file)} · ${rows.length} rows${st ? ' · ' + (st.bank === 'jago' ? 'Bank Jago' : 'Bank Muamalat') : ''}</p>` : ''}
   </div>
+  ${st ? `<div class="panel note emb"><span class="dot" style="background:${st.chain.ok ? 'var(--go-hi)' : 'var(--bad-hi)'}"></span><span>${st.chain.ok ? `Balance check passed on all ${st.chain.checked} rows — nothing was missed.` : `Balance check failed at ${esc(st.chain.breaks[0].date)}: a row may be missing. Compare with the statement before importing.`}</span></div>` : ''}
   ${I.rows ? `
   <div class="panel" style="padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap">
-    <span class="pill g">${nNew} new</span><span class="pill z">${nDup} already in budget</span>${nBad ? `<span class="pill r">${nBad} not readable</span>` : ''}${missingCat ? `<span class="pill o">${missingCat} need a category</span>` : ''}
+    <span class="pill g">${nNew} to import</span><span class="pill z">${nDup} already in YNAB 4</span>${nBad ? `<span class="pill r">${nBad} not readable</span>` : ''}${missing ? `<span class="pill o">${missing} need a category</span>` : ''}
   </div>
   <div class="card">
     ${rows.map((r, i) => {
       const nc = needCat(r);
+      const showSel = !r.problem && !r.dup && r.include;
       return `<div class="imp ${r.include ? '' : 'off'}">
         <input type="checkbox" id="inc-${i}" data-inc="${i}" ${r.include ? 'checked' : ''} ${r.problem ? 'disabled' : ''} aria-label="Import row ${r.n}">
         <div style="min-width:0">
           <label for="inc-${i}"><b>${esc(r.payee || '(no payee)')}</b></label>
           <span class="c">${r.date ? dm(r.date) : '—'}${r.memo ? ' · ' + esc(r.memo) : ''}</span>
-          ${r.problem ? `<span class="c" style="color:var(--bad)">${esc(r.problem)}</span>` : r.dup ? `<span class="c">Already in budget: ${esc((b.payeeById[r.dup.payeeId] || {}).name || '')} ${dm(r.dup.date)}</span>` : r.transferAccountId && !nc ? '<span class="c">Transfer — no category needed</span>' : nc ? `<select class="rowcat ${r.categoryId ? '' : 'need'}" data-cat="${i}" aria-label="Category for ${esc(r.payee)}">${categoryOptions(b, r.categoryId, r.amount > 0)}</select>${r.catSource === 'history' ? '<span class="c">suggested from your history</span>' : ''}` : ''}
+          ${r.problem ? `<span class="c" style="color:var(--bad)">${esc(r.problem)}</span>`
+            : r.dup ? `<span class="c">Already in YNAB 4: ${esc((b.payeeById[r.dup.payeeId] || {}).name || '')} ${dm(r.dup.date)}</span>`
+            : showSel ? `<select class="rowcat ${nc && !r.categoryId ? 'need' : ''}" data-cat="${i}" aria-label="Category for ${esc(r.payee)}">${rowChoice(b, r, I.accountId)}</select>${r.transferAccountId && nc ? `<select class="rowcat ${r.categoryId ? '' : 'need'}" data-cat2="${i}" aria-label="Budget category for this transfer">${categoryOptions(b, r.categoryId, r.amount > 0)}</select><span class="c">Transfer to an off-budget account — also needs a category</span>` : r.transferAccountId ? '<span class="c">Transfer — no category needed</span>' : r.transferHint ? '<span class="c">Looks like a transfer — pick the account</span>' : r.catSource && srcNote[r.catSource] ? `<span class="c">${srcNote[r.catSource]}</span>` : ''}` : ''}
         </div>
         <span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>
       </div>`;
     }).join('')}
   </div>
-  <button class="btn-go" id="impBtn" ${nNew && !missingCat && I.accountId ? '' : 'disabled'}>${!I.accountId ? 'Choose the account first' : missingCat ? 'Pick categories for ' + missingCat + ' rows' : 'Import ' + nNew + ' into YNAB 4'}</button>` : ''}`;
+  <button class="btn-go" id="impBtn" ${nNew && !missing && I.accountId ? '' : 'disabled'}>${!I.accountId ? 'Choose the account first' : missing ? 'Pick categories for ' + missing + ' rows' : 'Import ' + nNew + ' into YNAB 4'}</button>` : ''}`;
 }
 function bindImport() {
   const b = S.budget, I = S.imp;
-  const rebuild = () => { if (I.text) { try { I.rows = buildImportRows(b, I.text, I.accountId); } catch (e) { I.rows = null; toast(e.message); } } render(); };
-  document.getElementById('imp-file').onchange = async (e) => {
-    const f = e.target.files[0]; if (!f) return;
-    I.text = await f.text(); I.file = f.name;
-    I.accountId = I.accountId || guessAccount(b, f.name) || null;
-    rebuild();
-  };
-  document.getElementById('imp-acct').onchange = (e) => { I.accountId = e.target.value || null; rebuild(); };
-  document.querySelectorAll('[data-inc]').forEach((el) => el.onchange = () => { I.rows[+el.dataset.inc].include = el.checked; render(); });
-  document.querySelectorAll('[data-cat]').forEach((el) => el.onchange = () => { const r = I.rows[+el.dataset.cat]; r.categoryId = el.value; r.catSource = 'you'; render(); });
+  const rebuild = () => { if (I.raw) I.rows = finalizeRows(b, I.raw, I.accountId); render(); };
+  document.getElementById('imp-file').onchange = (e) => { const f = e.target.files[0]; if (f) importFile(f); };
+  document.getElementById('imp-acct').onchange = (e) => { I.accountId = e.target.value || null; I.rows = I.raw ? finalizeRows(b, I.raw, I.accountId) : I.rows; render(); };
+  bindImportRows();
+}
+async function importFile(f) {
+  const b = S.budget; S.imp = S.imp || { rows: null, accountId: null, file: '' }; const I = S.imp;
+  if (S.view !== 'import') go('import');
+  const rebuild = () => { if (I.raw) I.rows = finalizeRows(b, I.raw, I.accountId); render(); };
+  {
+    Object.assign(I, { file: f.name, rows: null, raw: null, statement: null, busy: true }); render();
+    try {
+      if (/\.pdf$/i.test(f.name) || f.type === 'application/pdf') {
+        await loadPdfJs();
+        const st = await Statements.readStatement(await f.arrayBuffer());
+        if (!st.txs.length) throw new Error('No transactions found in this PDF.');
+        I.statement = st;
+        I.accountId = guessAccount(b, f.name, st.bank) || I.accountId;
+        I.raw = rowsFromStatement(b, st);
+      } else {
+        I.raw = rowsFromCSV(b, await f.text());
+        I.accountId = I.accountId || guessAccount(b, f.name) || null;
+      }
+    } catch (err) { toast(err.message || 'Could not read that file.'); I.file = ''; }
+    I.busy = false; rebuild();
+  }
+}
+function bindImportRows() {
+  const b = S.budget, I = S.imp;
+  document.querySelectorAll('[data-inc]').forEach((el) => el.onchange = () => { const r = I.rows[+el.dataset.inc]; r.include = el.checked; r.userTouched = true; render(); });
+  document.querySelectorAll('[data-cat]').forEach((el) => el.onchange = () => {
+    const r = I.rows[+el.dataset.cat], v = el.value;
+    if (v.startsWith('transfer:')) { r.transferAccountId = v.slice(9); r.categoryId = ''; }
+    else { r.transferAccountId = null; r.categoryId = v; }
+    r.transferHint = false; r.catSource = 'you'; render();
+  });
+  document.querySelectorAll('[data-cat2]').forEach((el) => el.onchange = () => { I.rows[+el.dataset.cat2].categoryId = el.value; render(); });
   const btn = document.getElementById('impBtn');
   if (btn) btn.onclick = async () => {
     const acc = b.accountById[I.accountId];

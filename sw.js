@@ -1,7 +1,7 @@
 // Classic Four offline worker: keeps the app itself available offline.
 // Budget data is stored separately in IndexedDB by the page.
-const CACHE = 'four-app-v2';
-const APP = ['./', 'index.html', 'ynab4-engine.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
+const CACHE = 'four-app-v3';
+const APP = ['./', 'index.html', 'ynab4-engine.js', 'statements.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP)).then(() => self.skipWaiting()));
@@ -11,6 +11,21 @@ self.addEventListener('activate', (e) => {
 });
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
+  // A statement shared from the banking app (Android share sheet → Four)
+  if (e.request.method === 'POST' && url.search.includes('share-target')) {
+    e.respondWith((async () => {
+      try {
+        const data = await e.request.formData();
+        const f = data.get('statement');
+        if (f && f.size) {
+          const c = await caches.open('four-share');
+          await c.put('shared-statement', new Response(f, { headers: { 'Content-Type': f.type || 'application/octet-stream', 'X-File-Name': encodeURIComponent(f.name || 'statement') } }));
+        }
+      } catch (err) {}
+      return Response.redirect('./?shared=1', 303);
+    })());
+    return;
+  }
   if (e.request.method !== 'GET') return;
   // Google sign-in and Drive always go to the network
   if (/googleapis\.com$|google\.com$|gstatic\.com$/.test(url.hostname) && !/fonts\./.test(url.hostname)) return;
