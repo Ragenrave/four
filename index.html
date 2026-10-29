@@ -97,8 +97,9 @@ a{color:inherit}
 .bal3 b.big{font-size:18px;font-weight:800}
 .dock{position:fixed;left:0;right:0;bottom:0;padding:0 max(12px,env(safe-area-inset-right,0px)) calc(14px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));pointer-events:none}
 .dock-in{max-width:496px;margin:0 auto;display:flex;gap:10px;align-items:center;pointer-events:auto}
-.dock .panel{flex:1;border-radius:12px;display:flex;justify-content:space-around;padding:4px 0;background:rgba(14,72,118,.88);backdrop-filter:blur(6px)}
-.tab{width:48px;height:48px;border:0;background:none;display:flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
+.dock .panel{flex:1 1 auto;min-width:0;border-radius:12px;display:flex;justify-content:space-around;padding:4px;gap:2px;background:rgba(14,72,118,.88);backdrop-filter:blur(6px)}
+.dock .add{flex:0 0 auto;padding:0 20px}
+.tab{flex:1 1 0;min-width:44px;max-width:56px;height:48px;border:0;background:none;display:flex;align-items:center;justify-content:center;border-radius:10px;cursor:pointer}
 .tab[aria-current="page"]{background:rgba(0,0,0,.28)}
 .btn-go{height:56px;padding:0 18px;border-radius:12px;background:linear-gradient(var(--go-hi),var(--go));border:1px solid var(--go-edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(0,30,60,.3);display:flex;align-items:center;justify-content:center;gap:8px;color:#fff;font-size:17px;font-weight:800;text-shadow:0 1px 0 rgba(0,60,0,.45);cursor:pointer;white-space:nowrap}
 .btn-go[disabled]{filter:grayscale(.6);opacity:.75;cursor:default}
@@ -158,7 +159,7 @@ a{color:inherit}
       <button class="tab" data-go="import" aria-label="Import statement"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M12 18v-6M9 15l3 3 3-3"/></svg></button>
       <button class="tab" data-go="sync" aria-label="Sync and settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4"/></svg></button>
     </div>
-    <button class="btn-go" id="addBtn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add Transaction</button>
+    <button class="btn-go add" id="addBtn" aria-label="Add transaction"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span>Add</span></button>
   </div>
 </nav>
 <input type="file" id="dirPick" webkitdirectory directory multiple hidden>
