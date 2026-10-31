@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#1D5F92">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kas Bekasi">
+<title>Kas Bekasi</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;0,800;1,700&display=swap">
+<style>
+/* Kas Bekasi — Classic Four's linen blue, one job: log cash spending */
+:root{
+  --linen:#2F8DC4; --panel:rgba(14,72,118,.55); --panel-hi:#1D5F92; --panel-lo:#134A76;
+  --ink:#1F3A4D; --muted:#3C5A70; --rule:#B9CFDD; --band:#F7FAFC;
+  --go:#5BAF2C; --go-hi:#8ED35E; --go-edge:#4A9622; --warn-hi:#F7C548; --bad:#D2413A;
+  --font:'Source Sans 3','Myriad Pro',-apple-system,'Segoe UI',system-ui,sans-serif;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{font-family:var(--font);color:#fff;font-size:16px;background-color:var(--linen);
+  background-image:repeating-linear-gradient(0deg,rgba(255,255,255,.035) 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,rgba(0,40,80,.05) 0 1px,transparent 1px 3px);
+  -webkit-tap-highlight-color:transparent}
+main{max-width:520px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px));display:flex;flex-direction:column;gap:10px}
+.emb{text-shadow:0 1px 1px rgba(0,25,50,.55)}
+.panel{background:var(--panel);border:1px solid rgba(255,255,255,.14);border-radius:10px;box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 2px 6px rgba(0,30,60,.25)}
+.bar{display:flex;align-items:center;gap:10px;padding:12px 14px;background:linear-gradient(var(--panel-hi),var(--panel-lo));border-radius:10px 10px 0 0}
+.bar h1{margin:0;font-size:21px;font-weight:700}
+.chip{margin-left:auto;display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(0,0,0,.22);font-size:12px;font-weight:600;border:0;color:#fff;font-family:inherit;min-height:28px}
+.chip i{width:8px;height:8px;border-radius:50%;background:var(--go-hi)}
+.chip.wait i{background:var(--warn-hi)}
+label.amt-l{display:block;text-align:center;font-size:13px;font-weight:600;opacity:.9;padding-top:10px}
+.bigamt{display:block;width:100%;border:0;background:transparent;color:#fff;text-align:center;font-family:inherit;font-size:46px;font-weight:800;padding:0 14px 14px;outline:none;font-variant-numeric:tabular-nums}
+.bigamt::placeholder{color:rgba(255,255,255,.5)}
+.card{background:#fff;color:var(--ink);border-radius:10px;box-shadow:0 2px 8px rgba(0,30,60,.3);overflow:hidden}
+.card h2{margin:0;padding:9px 14px;font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);background:var(--band);border-bottom:1px dotted var(--rule)}
+.cats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:12px}
+.cat{min-height:48px;border:1px solid #C6D7E3;border-radius:10px;background:linear-gradient(#FFFFFF,#EEF4F8);color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;padding:6px 8px;text-align:center}
+.cat[aria-pressed="true"]{background:linear-gradient(#3D9AD3,#2A80B9);border-color:#1F6C9E;color:#fff;text-shadow:0 1px 0 rgba(0,40,80,.4)}
+.fl{display:grid;grid-template-columns:84px minmax(0,1fr);align-items:center;gap:8px;padding:9px 14px;border-top:1px dotted var(--rule)}
+.fl label{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted)}
+.fl input{width:100%;min-width:0;height:44px;border:1px solid #C6D7E3;border-radius:6px;padding:0 10px;font-family:inherit;font-size:16px;color:var(--ink);background:#fff}
+.save{height:56px;border-radius:12px;background:linear-gradient(var(--go-hi),var(--go));border:1px solid var(--go-edge);box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 6px rgba(0,30,60,.3);color:#fff;font-family:inherit;font-size:18px;font-weight:800;text-shadow:0 1px 0 rgba(0,60,0,.45);cursor:pointer}
+.save:disabled{filter:grayscale(.6);opacity:.75}
+.row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;padding:9px 14px;border-top:1px dotted var(--rule);font-size:15px;font-variant-numeric:tabular-nums}
+.row:first-of-type{border-top:0}
+.row b{display:block}
+.row small{display:block;color:var(--muted);font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .r{text-align:right;font-weight:700}
+.row .r small{font-weight:600}
+.ok{color:#2E7A12}.wt{color:#8A5A00}
+.note{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;font-size:14px;line-height:1.4}
+.note .dot{width:10px;height:10px;border-radius:50%;background:var(--warn-hi);margin-top:5px;flex-shrink:0}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(24px + env(safe-area-inset-bottom,0px));background:#0E2F4A;color:#fff;padding:10px 16px;border-radius:10px;font-size:15px;font-weight:600;box-shadow:0 6px 18px rgba(0,0,0,.3);max-width:90%;z-index:5}
+:focus-visible{outline:3px solid var(--warn-hi);outline-offset:2px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <section class="panel">
+    <div class="bar">
+      <svg width="26" height="26" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4v6.5L13.5 21 21 13.5 10.5 3H4a1 1 0 0 0-1 1z" fill="#D4E04A" stroke="#8FA312" stroke-width="1.2"/><circle cx="7.5" cy="7.5" r="1.6" fill="#134A76"/></svg>
+      <h1 class="emb">Kas Bekasi</h1>
+      <span class="chip" id="chip" role="status"><i></i><span id="chipText">Siap</span></span>
+    </div>
+    <label class="amt-l emb" for="amt">Uang tunai yang dipakai (Rp)</label>
+    <input id="amt" class="bigamt emb" inputmode="numeric" autocomplete="off" placeholder="0">
+  </section>
+
+  <section class="card" aria-labelledby="catH">
+    <h2 id="catH">UNTUK APA?</h2>
+    <div class="cats" id="cats" role="group" aria-labelledby="catH"></div>
+    <div class="fl"><label for="note">CATATAN</label><input id="note" placeholder="mis. laundry 2 kg, beli gas" autocomplete="off"></div>
+    <div class="fl"><label for="date">TANGGAL</label><input id="date" type="date"></div>
+  </section>
+
+  <button class="save" id="save">Simpan</button>
+
+  <div class="panel note emb" id="setupNote" hidden><span class="dot"></span><span>Aplikasi ini belum tersambung. Minta Aditya untuk menyelesaikan pengaturannya.</span></div>
+
+  <section class="card" aria-labelledby="histH">
+    <h2 id="histH">CATATAN TERAKHIR</h2>
+    <div id="hist"></div>
+  </section>
+</main>
+<script src="config.js"></script>
+<script>
+'use strict';
+// Categories map to Aditya's YNAB categories by code; Four does the mapping.
+const CATS = [
+  ['groceries', 'Belanja dapur'], ['restaurant', 'Makan / jajan'],
+  ['laundry', 'Laundry'], ['household', 'Keperluan rumah'],
+  ['uangmasak', 'Uang masak'], ['pets', 'Kucing'],
+  ['medical', 'Obat / berobat'], ['transport', 'Ojek / transport'],
+  ['lainnya', 'Lainnya']
+];
+const CFG = window.KAS_CONFIG || null;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('kas.' + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem('kas.' + k, JSON.stringify(v)); } catch (e) {} }
+};
+let entries = store.get('entries', []);   // [{id, tanggal, jumlah, kategori, catatan, sent}]
+let picked = null;
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => Number(n).toLocaleString('id-ID');
+const today = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); };
+const uid = () => (Date.now().toString(36) + Math.random().toString(36).slice(2, 7)).toUpperCase();
+const label = (code) => (CATS.find((c) => c[0] === code) || [code, code])[1];
+const esc = (s) => String(s || '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function toast(t) { let el = document.querySelector('.toast'); if (!el) { el = document.createElement('div'); el.className = 'toast'; el.setAttribute('role', 'status'); document.body.appendChild(el); } el.textContent = t; clearTimeout(toast.t); toast.t = setTimeout(() => el.remove(), 2800); }
+
+function renderCats() {
+  $('cats').innerHTML = CATS.map(([code, name]) => `<button type="button" class="cat" data-c="${code}" aria-pressed="${picked === code}" ${code === 'lainnya' ? 'style="grid-column:1/-1"' : ''}>${esc(name)}</button>`).join('');
+  $('cats').querySelectorAll('.cat').forEach((b) => b.onclick = () => { picked = b.dataset.c; renderCats(); });
+}
+function renderHist() {
+  const waiting = entries.filter((e) => !e.sent).length;
+  $('chip').className = 'chip' + (waiting ? ' wait' : '');
+  $('chipText').textContent = waiting ? waiting + ' belum terkirim' : navigator.onLine ? 'Semua terkirim' : 'Offline';
+  const rows = entries.slice(-15).reverse();
+  $('hist').innerHTML = rows.length ? rows.map((e) => `<div class="row"><div style="min-width:0"><b>${esc(label(e.kategori))}</b><small>${e.tanggal.slice(8, 10)}/${e.tanggal.slice(5, 7)}${e.catatan ? ' · ' + esc(e.catatan) : ''}</small></div><div class="r">Rp${fmt(e.jumlah)}<small class="${e.sent ? 'ok' : 'wt'}">${e.sent ? '✓ terkirim' : '⏳ menunggu'}</small></div></div>`).join('') : '<div class="row"><small>Belum ada catatan.</small></div>';
+}
+
+let sending = false;
+async function flush() {
+  if (sending || !CFG || !navigator.onLine) return;
+  sending = true;
+  try {
+    for (const e of entries) {
+      if (e.sent) continue;
+      const body = new URLSearchParams();
+      body.set(CFG.fields.id, e.id); body.set(CFG.fields.tanggal, e.tanggal); body.set(CFG.fields.jumlah, String(e.jumlah));
+      body.set(CFG.fields.kategori, e.kategori); body.set(CFG.fields.catatan, e.catatan || '-'); body.set(CFG.fields.oleh, CFG.who || 'Tara');
+      // Google Forms does not answer cross-site requests readably; a resolved fetch means it arrived.
+      await fetch(CFG.action, { method: 'POST', mode: 'no-cors', body });
+      e.sent = true; store.set('entries', entries); renderHist();
+    }
+  } catch (err) { /* still offline or Google unreachable: try again later */ }
+  sending = false; renderHist();
+}
+
+$('amt').addEventListener('input', () => { const n = Number($('amt').value.replace(/[^\d]/g, '')); $('amt').value = n ? n.toLocaleString('id-ID') : ''; });
+$('date').value = today();
+$('save').onclick = async () => {
+  const jumlah = Number($('amt').value.replace(/[^\d]/g, ''));
+  if (!jumlah) { toast('Isi jumlah uangnya dulu ya.'); $('amt').focus(); return; }
+  if (!picked) { toast('Pilih untuk apa uangnya dipakai.'); return; }
+  const catatan = $('note').value.trim();
+  if (picked === 'lainnya' && !catatan) { toast('Untuk "Lainnya", tulis catatannya ya.'); $('note').focus(); return; }
+  entries.push({ id: uid(), tanggal: $('date').value || today(), jumlah, kategori: picked, catatan, sent: false });
+  if (entries.length > 300) entries = entries.slice(-300);
+  store.set('entries', entries);
+  $('amt').value = ''; $('note').value = ''; picked = null; $('date').value = today();
+  renderCats(); renderHist();
+  toast(navigator.onLine ? 'Tersimpan. Terima kasih!' : 'Tersimpan di HP. Dikirim saat ada sinyal.');
+  flush();
+};
+window.addEventListener('online', () => { renderHist(); flush(); });
+window.addEventListener('offline', renderHist);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flush(); });
+if (!CFG) { $('setupNote').hidden = false; $('save').disabled = true; }
+renderCats(); renderHist(); flush();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
