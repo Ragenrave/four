@@ -442,6 +442,7 @@ async function refresh(interactive) {
     if (dev && dev.pendingDeviceFile) { await writeDeviceFile(tree, JSON.parse(await cachedText(tree.files['Budget.ymeta'])).relativeDataFolderName); tree = await syncFromDrive(folder.id); }
     await IDB.put('kv', 'tree', tree);
     await openBudget(treeIO(tree), 'drive');
+    try { await loadInbox(); } catch (e) { /* inbox is optional */ }
     LS.set('lastSync', Date.now());
     toast(sent ? 'Sent ' + sent + ' to YNAB 4 — open YNAB 4 to see them' : 'Up to date with Google Drive');
   } catch (e) {
@@ -471,6 +472,96 @@ async function takeSharedStatement() {
     const blob = await r.blob();
     importFile(new File([blob], name, { type: blob.type }));
   } catch (e) { toast('Could not open the shared statement.'); }
+}
+
+/* ================= Kas Bekasi inbox (entries Tara logs on her phone) ================= */
+const KAS_CATS = { groceries: 'Groceries', restaurant: 'Restaurant', laundry: 'Laundry', household: 'Household Goods', uangmasak: 'Uang Masak', pets: 'Pets', medical: 'Medical', transport: 'Transportation' };
+const KAS_LABEL = { groceries: 'Belanja dapur', restaurant: 'Makan / jajan', laundry: 'Laundry', household: 'Keperluan rumah', uangmasak: 'Uang masak', pets: 'Kucing', medical: 'Obat / berobat', transport: 'Ojek / transport', lainnya: 'Lainnya' };
+function kasAccount(b) { return b && b.accountBalances().find((a) => /bekasi\s*cash/i.test(a.name)); }
+async function loadInbox() {
+  let id = LS.get('kasSheet', null);
+  if (!id) {
+    const r = await Drive.api('files', { q: "mimeType='application/vnd.google-apps.spreadsheet' and name contains 'Kas Bekasi' and trashed=false", fields: 'files(id,name)', pageSize: '5' });
+    if (!r.files.length) return;
+    id = r.files[0].id; LS.set('kasSheet', id);
+  }
+  const csv = await Drive.api('files/' + id + '/export', { mimeType: 'text/csv' }, true);
+  LS.set('kasRows', parseKasRows(csv));
+  LS.set('kasChecked', Date.now());
+}
+function parseKasRows(csv) {
+  const rows = parseCSV(csv); if (rows.length < 2) return [];
+  const h = rows[0].map((x) => x.trim().toLowerCase());
+  const at = (n) => h.indexOf(n);
+  return rows.slice(1).map((r) => ({
+    id: (r[at('id')] || '').trim(), tanggal: (r[at('tanggal')] || '').trim(), jumlah: Math.round(Number(String(r[at('jumlah')] || '').replace(/[^\d]/g, ''))),
+    kategori: (r[at('kategori')] || '').trim(), catatan: (r[at('catatan')] || '').trim().replace(/^-$/, ''), oleh: (r[at('oleh')] || 'Tara').trim()
+  })).filter((x) => x.id && x.jumlah > 0 && /^\d{4}-\d{2}-\d{2}$/.test(x.tanggal));
+}
+// Entries not yet in YNAB 4 (their id appears in a memo once imported) and not dismissed
+function inboxItems() {
+  const b = S.budget; if (!b) return [];
+  const done = new Set(LS.get('kasDismissed', []));
+  const memoIds = new Set();
+  b.transactions.forEach((t) => { const m = /#k:([A-Z0-9]+)/.exec(t.memo || ''); if (m) memoIds.add(m[1]); });
+  const seen = new Set();
+  return LS.get('kasRows', []).filter((x) => { if (done.has(x.id) || memoIds.has(x.id) || seen.has(x.id)) return false; seen.add(x.id); return true; });
+}
+function kasCategoryId(b, x) {
+  const name = KAS_CATS[x.kategori];
+  if (name) { const c = Object.values(b.categoryById).find((c) => c.name.toLowerCase() === name.toLowerCase()); if (c) return c.entityId; }
+  const fromNote = window.Statements && Statements.categoryFromNote(x.catatan, b);
+  if (fromNote) return fromNote;
+  const s = x.catatan && b.suggestCategory(x.catatan); return (s && s.categoryId) || '';
+}
+function inboxBanner() {
+  const n = inboxItems().length; if (!n) return '';
+  return `<button class="panel note emb" data-go2="inbox" style="width:100%;border:1px solid rgba(255,255,255,.14);color:#fff;font:inherit;text-align:left;cursor:pointer"><span class="dot"></span><span><b>${n} cash ${n === 1 ? 'entry' : 'entries'} from Tara</b> — tap to check and send to YNAB 4</span></button>`;
+}
+function viewInbox() {
+  const b = S.budget, acc = kasAccount(b), items = inboxItems();
+  S.inboxSel = S.inboxSel || {};
+  items.forEach((x) => { if (!S.inboxSel[x.id]) S.inboxSel[x.id] = { include: true, categoryId: kasCategoryId(b, x) }; });
+  const chosen = items.filter((x) => S.inboxSel[x.id].include);
+  const missing = chosen.filter((x) => !S.inboxSel[x.id].categoryId).length;
+  const checked = LS.get('kasChecked', 0);
+  return `
+  <div class="panel">
+    <div class="bar"><button class="iconbtn" data-go2="home" aria-label="Back">${ICON.back}</button><h1 class="emb" style="font-size:20px">From Tara</h1>${syncChip()}</div>
+    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Cash Tara logged in Kas Bekasi. ${acc ? 'They go into <b>' + esc(acc.name) + '</b>.' : ''} ${checked ? 'Checked ' + esc(lastAgo(checked)) + '.' : ''}</span></div>
+  </div>
+  ${!acc ? `<div class="panel note emb"><span class="dot" style="background:var(--bad-hi)"></span><span>Create a cash account named <b>Bekasi Cash</b> in YNAB 4 (Add Account → Cash, on budget), sync, and come back. Tara's entries need it.</span></div>` : ''}
+  ${items.length ? `<div class="card">
+    ${items.map((x) => { const sel = S.inboxSel[x.id]; return `<div class="imp ${sel.include ? '' : 'off'}">
+      <input type="checkbox" id="kx-${x.id}" data-kinc="${x.id}" ${sel.include ? 'checked' : ''} aria-label="Send entry ${esc(x.catatan || KAS_LABEL[x.kategori] || '')}">
+      <div style="min-width:0">
+        <label for="kx-${x.id}"><b>${esc(KAS_LABEL[x.kategori] || x.kategori)}${x.catatan ? ' · ' + esc(x.catatan) : ''}</b></label>
+        <span class="c">${dm(x.tanggal)} · logged by ${esc(x.oleh)}</span>
+        ${sel.include ? `<select class="rowcat ${sel.categoryId ? '' : 'need'}" data-kcat="${x.id}" aria-label="Category">${categoryOptions(b, sel.categoryId, false)}</select>` : ''}
+      </div>
+      <span style="display:flex;flex-direction:column;align-items:flex-end;gap:6px"><span class="amt">−${fmt(x.jumlah)}</span><button class="pchip" data-kdis="${x.id}" aria-label="Dismiss this entry">Dismiss</button></span>
+    </div>`; }).join('')}
+  </div>
+  <button class="btn-go" id="kasSend" ${acc && chosen.length && !missing ? '' : 'disabled'}>${!acc ? 'Create Bekasi Cash first' : missing ? 'Pick categories for ' + missing : 'Send ' + chosen.length + ' to YNAB 4'}</button>` : `<div class="panel empty emb"><h2>All caught up</h2><p>Nothing new from Tara.</p></div>`}`;
+}
+function lastAgo(t) { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago'; }
+function bindInbox() {
+  const b = S.budget;
+  document.querySelectorAll('[data-kinc]').forEach((el) => el.onchange = () => { S.inboxSel[el.dataset.kinc].include = el.checked; render(); });
+  document.querySelectorAll('[data-kcat]').forEach((el) => el.onchange = () => { S.inboxSel[el.dataset.kcat].categoryId = el.value; render(); });
+  document.querySelectorAll('[data-kdis]').forEach((el) => el.onclick = () => { const d = LS.get('kasDismissed', []); d.push(el.dataset.kdis); LS.set('kasDismissed', d.slice(-500)); render(); toast('Dismissed'); });
+  const btn = document.getElementById('kasSend');
+  if (btn) btn.onclick = async () => {
+    const acc = kasAccount(b);
+    const entries = inboxItems().filter((x) => S.inboxSel[x.id].include).map((x) => ({
+      accountId: acc.id, date: x.tanggal, amount: -x.jumlah, payeeName: x.oleh || 'Tara', categoryId: S.inboxSel[x.id].categoryId,
+      memo: [x.catatan, 'Kas Bekasi #k:' + x.id].filter(Boolean).join(' · '), cleared: 'Cleared'
+    }));
+    await addPending(entries);
+    S.inboxSel = {};
+    go('home');
+    if (navigator.onLine && Drive.valid()) refresh(false); else toast(entries.length + ' saved. Tap the yellow chip to send them to YNAB 4.');
+  };
 }
 
 /* ================= rendering ================= */
@@ -507,7 +598,7 @@ const ICON = {
 };
 
 function render() {
-  document.querySelectorAll('.tab').forEach((t) => t.toggleAttribute('aria-current', t.dataset.go === S.view || (S.view === 'account' && t.dataset.go === 'home')));
+  document.querySelectorAll('.tab').forEach((t) => t.toggleAttribute('aria-current', t.dataset.go === S.view || ((S.view === 'account' || S.view === 'inbox') && t.dataset.go === 'home')));
   document.querySelectorAll('.tab[aria-current]').forEach((t) => t.setAttribute('aria-current', 'page'));
   const v = S.view;
   if (v === 'welcome' || (!S.budget && v !== 'sync')) app.innerHTML = viewWelcome();
@@ -517,6 +608,7 @@ function render() {
   else if (v === 'sync') app.innerHTML = viewSync();
   else if (v === 'add') { app.innerHTML = viewAdd(); bindAdd(); }
   else if (v === 'import') { app.innerHTML = viewImport(); bindImport(); }
+  else if (v === 'inbox') { app.innerHTML = viewInbox(); bindInbox(); }
   dock.hidden = v === 'add';
   bind();
 }
@@ -776,8 +868,14 @@ function rowsFromStatement(b, st) {
 // Mark rows already in the budget (same account, same amount, within 3 days) and set what to import
 function finalizeRows(b, rows, accountId) {
   const used = new Set();
+  const acc = b.accountById[accountId];
+  const word = acc ? acc.accountName.split(/\s+/)[0] : '';
+  const sibCash = word && b.accountBalances().find((a) => a.id !== accountId && a.name.toLowerCase() === (word + ' cash').toLowerCase());
   rows.forEach((row) => {
     row.dup = null;
+    if (row._tr0 === undefined) row._tr0 = row.transferAccountId || null;
+    // cash withdrawn from e.g. the Bekasi card goes into "Bekasi Cash", not the main Cash wallet
+    if (!row.userTouched && row._tr0 && /^cash$/i.test((b.accountById[row._tr0] || {}).accountName || '')) row.transferAccountId = sibCash ? sibCash.id : row._tr0;
     if (!row.problem && accountId) {
       const cands = b.transactions.filter((t) => t.accountId === accountId && Math.round(t.amount) === row.amount && !used.has(t.entityId) && Math.abs(Date.parse(t.date) - Date.parse(row.date)) <= 3 * 86400000);
       cands.sort((x, y) => Math.abs(Date.parse(x.date) - Date.parse(row.date)) - Math.abs(Date.parse(y.date) - Date.parse(row.date)));
@@ -930,6 +1028,7 @@ function viewHome() {
     <button class="group-h emb" data-toggle="off" aria-expanded="${!!S.open.off}">${ICON.tri}<span>Off-Budget Accounts</span><span>${rp(t.offBudget)}</span></button>
     ${S.open.off ? off.map(acctRow).join('') : ''}
   </div>
+  ${inboxBanner()}
   <div class="card">
     <div class="card-h"><b>${monthLabel(m)}</b><small>Available to Budget · <span style="color:${atbCls === 'neg' ? 'var(--bad)' : atbCls === 'pos' ? '#2E7A12' : 'var(--muted)'}">${rp(mo.availableToBudget)}</span></small></div>
     <div class="line head" style="grid-template-columns:minmax(0,1fr) auto"><span>PAYDAY CYCLE ${esc(cyc.label.toUpperCase())}</span><span style="text-align:right">${cyc.daysLeft} DAYS TO PAYDAY</span></div>
