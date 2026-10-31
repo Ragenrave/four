@@ -528,7 +528,7 @@ function viewInbox() {
   return `
   <div class="panel">
     <div class="bar"><button class="iconbtn" data-go2="home" aria-label="Back">${ICON.back}</button><h1 class="emb" style="font-size:20px">From Tara</h1>${syncChip()}</div>
-    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Cash Tara logged in Kas Bekasi. ${acc ? 'They go into <b>' + esc(acc.name) + '</b>.' : ''} ${checked ? 'Checked ' + esc(lastAgo(checked)) + '.' : ''}</span></div>
+    <div class="note emb"><span class="dot" style="background:var(--go-hi)"></span><span>Cash Tara logged in Kas Bekasi. ${acc ? 'They go into <b>' + esc(acc.name) + '</b>, which holds <b>' + fmt(acc.working) + '</b> now' + (items.length ? ' (' + fmt(acc.working - chosen.reduce((s, x) => s + x.jumlah, 0)) + ' after these)' : '') + '.' : ''} ${checked ? 'Checked ' + esc(lastAgo(checked)) + '.' : ''}</span></div>
   </div>
   ${!acc ? `<div class="panel note emb"><span class="dot" style="background:var(--bad-hi)"></span><span>Create a cash account named <b>Bekasi Cash</b> in YNAB 4 (Add Account → Cash, on budget), sync, and come back. Tara's entries need it.</span></div>` : ''}
   ${items.length ? `<div class="card">
@@ -640,6 +640,19 @@ function transferAccountFromPayee(b, name) {
   const a = b.accountBalances().find((x) => x.name.toLowerCase() === want) || b.accountBalances().find((x) => x.name.toLowerCase().startsWith(want) || want.startsWith(x.name.toLowerCase()));
   return a ? a.id : null;
 }
+// "Bekasi Card" → its "Bekasi Cash" sibling, if that account exists
+function cashSibling(b, accountId) {
+  const acc = b.accountById[accountId]; if (!acc) return null;
+  const word = (acc.accountName || '').trim().split(/\s+/)[0]; if (!word || /^cash$/i.test(acc.accountName)) return null;
+  return b.accountBalances().find((a) => a.id !== accountId && !a.hidden && a.name.toLowerCase() === (word + ' cash').toLowerCase()) || null;
+}
+const WITHDRAW_RE = /^\s*(atm\b|tarik(\s*tunai)?\b|penarikan|cash\s*withdraw|withdraw)/i;
+// payee "Transfer : X", or a cash-withdrawal payee on a card that has a "<Word> Cash" sibling
+function resolveTransfer(b, d) {
+  const t = transferAccountFromPayee(b, d.payee); if (t) return t;
+  if (d.dir === 'out' && WITHDRAW_RE.test(d.payee)) { const s = cashSibling(b, d.accountId); if (s) return s.id; }
+  return null;
+}
 
 /* ================= Add Transaction ================= */
 function newDraft() {
@@ -652,7 +665,10 @@ function viewAdd() {
   b.map.forEach((e) => { if (e.entityType === 'payee' && !e.isTombstone && e.enabled !== false && e.name && !/^Payee\/(Transfer|Starting)/.test(e.entityId) && !/^(Starting Balance|Reconciliation Balance)/.test(e.name)) payees.push(e.name); });
   payees.sort((a, c) => a.localeCompare(c));
   const transfers = b.accountBalances().filter((a) => a.id !== d.accountId).map((a) => 'Transfer : ' + a.name);
-  const recent = recentPayees(b, d.accountId);
+  const sib = d.dir === 'out' && cashSibling(b, d.accountId);
+  const recent = recentPayees(b, d.accountId).filter((p) => !WITHDRAW_RE.test(p));
+  const chips = (sib ? [`<button type="button" class="pchip" data-payee="Transfer : ${esc(sib.name)}" style="font-weight:700">Tarik tunai → ${esc(sib.name)}</button>`] : [])
+    .concat(recent.map((p) => `<button type="button" class="pchip" data-payee="${esc(p)}">${esc(p)}</button>`));
   return `
   <div class="panel">
     <div class="bar"><button class="iconbtn" data-go2="home" aria-label="Cancel"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button><h1 class="emb" style="font-size:20px">Add Transaction</h1></div>
@@ -666,7 +682,7 @@ function viewAdd() {
   <form class="card" id="addForm" autocomplete="off">
     <div class="fl"><label for="f-acct">ACCOUNT</label><select id="f-acct">${accountOptions(b, d.accountId)}</select></div>
     <div class="fl"><label for="f-payee">PAYEE</label><input id="f-payee" list="payeeList" value="${esc(d.payee)}" placeholder="Who did you pay?"><datalist id="payeeList">${transfers.concat(payees).map((p) => `<option value="${esc(p)}">`).join('')}</datalist></div>
-    ${recent.length ? `<div class="chips">${recent.map((p) => `<button type="button" class="pchip" data-payee="${esc(p)}">${esc(p)}</button>`).join('')}</div>` : ''}
+    ${chips.length ? `<div class="chips">${chips.join('')}</div>` : ''}
     <div class="fl" id="catRow"><label for="f-cat">CATEGORY</label><select id="f-cat">${categoryOptions(b, d.categoryId, d.dir === 'in')}</select></div>
     <div id="catHint" class="hint"></div>
     <div class="fl"><label for="f-date">DATE</label><input id="f-date" type="date" value="${d.date}"></div>
@@ -687,12 +703,19 @@ function bindAdd() {
   const $ = (id) => document.getElementById(id);
   const amt = $('amt');
   const updateHint = () => {
-    const tAcc = transferAccountFromPayee(b, d.payee);
+    const tAcc = resolveTransfer(b, d);
     const from = b.accountById[d.accountId], to = tAcc && b.accountById[tAcc];
     const needCat = !tAcc || (!!from.onBudget !== !!to.onBudget);
     $('catRow').style.display = needCat ? '' : 'none';
     const h = $('catHint');
-    if (tAcc && !needCat) { h.textContent = 'Transfer between budget accounts — no category needed.'; return; }
+    if (tAcc && !needCat) {
+      const viaWord = !transferAccountFromPayee(b, d.payee);
+      const tb = b.accountBalances().find((a) => a.id === tAcc), tName = tb.name;
+      const cashNow = tb.working - (d.dir === 'out' ? -1 : 1) * parseAmountInput(d.amount);
+      const after = /cash/i.test(tName) ? ` ${esc(tName)} will hold <b>${fmt(cashNow)}</b>.` : '';
+      h.innerHTML = viaWord ? `Cash withdrawal — saved as a transfer to <b>${esc(tName)}</b>.${after}` : `Transfer between budget accounts — no category needed.${after}`;
+      return;
+    }
     if (!from.onBudget && !tAcc) { $('catRow').style.display = 'none'; h.textContent = 'Off-budget account — no category needed.'; return; }
     const av = d.categoryId ? catAvailable(b, d.categoryId) : null;
     if (av == null) { h.textContent = d.catAuto && d.categoryId ? '' : ''; return; }
@@ -718,7 +741,7 @@ function bindAdd() {
     const amount = parseAmountInput(d.amount);
     if (!amount) { toast('Enter an amount.'); amt.focus(); return; }
     if (!d.payee.trim()) { toast('Enter a payee, or pick "Transfer : …" for a transfer.'); $('f-payee').focus(); return; }
-    const tAcc = transferAccountFromPayee(b, d.payee);
+    const tAcc = resolveTransfer(b, d);
     if (/^\s*transfer\s*:/i.test(d.payee) && !tAcc) { toast('No account matches that transfer.'); return; }
     if (tAcc === d.accountId) { toast('Pick a different account to transfer to.'); return; }
     const from = b.accountById[d.accountId], to = tAcc && b.accountById[tAcc];
