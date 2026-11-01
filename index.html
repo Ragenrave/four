@@ -295,6 +295,11 @@ const Drive = {
   update(id, text) {
     return this.send('PATCH', 'https://www.googleapis.com/upload/drive/v3/files/' + id + '?uploadType=media&supportsAllDrives=true&fields=id,md5Checksum', text, { 'Content-Type': 'application/octet-stream' });
   },
+  uploadBlob(meta, blob) {
+    const b = 'four' + Math.random().toString(36).slice(2);
+    const body = new Blob([`--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: ${blob.type || 'application/pdf'}\r\n\r\n`, blob, `\r\n--${b}--`]);
+    return this.send('POST', 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id,webViewLink', body, { 'Content-Type': 'multipart/related; boundary=' + b });
+  },
   mkdir(name, parentId) {
     return this.send('POST', 'https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id', JSON.stringify({ name, parents: [parentId], mimeType: 'application/vnd.google-apps.folder' }), { 'Content-Type': 'application/json' }).then((r) => r.id);
   }
@@ -437,6 +442,7 @@ async function refresh(interactive) {
     if (interactive) await Drive.ensureToken(!Drive.valid() && !LS.get('everSignedIn', false));
     LS.set('everSignedIn', true);
     const sent = await publish(folder);
+    let filed = 0; try { filed = await flushArchive(folder); } catch (e) { S.archiveError = e.message; }
     let tree = await syncFromDrive(folder.id, (s) => { S.status = s; renderChip(); });
     const dev = LS.get('device', null);
     if (dev && dev.pendingDeviceFile) { await writeDeviceFile(tree, JSON.parse(await cachedText(tree.files['Budget.ymeta'])).relativeDataFolderName); tree = await syncFromDrive(folder.id); }
@@ -444,7 +450,7 @@ async function refresh(interactive) {
     await openBudget(treeIO(tree), 'drive');
     try { await loadInbox(); } catch (e) { /* inbox is optional */ }
     LS.set('lastSync', Date.now());
-    toast(sent ? 'Sent ' + sent + ' to YNAB 4 — open YNAB 4 to see them' : 'Up to date with Google Drive');
+    toast((sent ? 'Sent ' + sent + ' to YNAB 4 — open YNAB 4 to see them' : 'Up to date with Google Drive') + (filed ? ' · statement saved to Drive' : ''));
   } catch (e) {
     S.error = e.message || String(e); toast(S.error);
   } finally { S.busy = false; S.status = ''; render(); }
@@ -961,7 +967,8 @@ function viewImport() {
       </div>`;
     }).join('')}
   </div>
-  <button class="btn-go" id="impBtn" ${nNew && !missing && I.accountId ? '' : 'disabled'}>${!I.accountId ? 'Choose the account first' : missing ? 'Pick categories for ' + missing + ' rows' : 'Import ' + nNew + ' into YNAB 4'}</button>` : ''}`;
+  ${I.blob && I.accountId ? `<div class="panel note emb"><span class="dot" style="background:var(--go-hi)"></span><span>A copy of this PDF goes to your Drive, in <b>${esc(ARCHIVE_ROOT)} › ${esc(b.accountById[I.accountId].accountName)}</b>${isFinite(statementClosing(st).amount) ? ', with its closing balance of <b>' + fmt(statementClosing(st).amount) + '</b> noted' : ''}.</span></div>` : ''}
+  <button class="btn-go" id="impBtn" ${(nNew || I.blob) && !missing && I.accountId ? '' : 'disabled'}>${!I.accountId ? 'Choose the account first' : missing ? 'Pick categories for ' + missing + ' rows' : nNew ? 'Import ' + nNew + ' into YNAB 4' + (I.blob ? ' & save copy' : '') : 'Nothing new — save the statement copy'}</button>` : ''}`;
 }
 function bindImport() {
   const b = S.budget, I = S.imp;
@@ -981,7 +988,7 @@ async function importFile(f) {
         await loadPdfJs();
         const st = await Statements.readStatement(await f.arrayBuffer());
         if (!st.txs.length) throw new Error('No transactions found in this PDF.');
-        I.statement = st;
+        I.statement = st; I.blob = f;
         I.accountId = guessAccount(b, f.name, st.bank) || I.accountId;
         I.raw = rowsFromStatement(b, st);
       } else {
@@ -1011,11 +1018,72 @@ function bindImportRows() {
       else { e.payeeName = r.payee || 'Unknown'; if (acc.onBudget) e.categoryId = r.categoryId; }
       return e;
     });
-    await addPending(entries);
+    if (entries.length) await addPending(entries);
+    const archived = await queueArchive(I, acc);
     const n = entries.length; S.imp = null;
     go('home');
-    if (navigator.onLine && Drive.valid()) refresh(false); else toast(n + ' saved on this phone. Tap the yellow chip to send them to YNAB 4.');
+    if (navigator.onLine && Drive.valid()) refresh(false);
+    else toast(n ? n + ' saved on this phone. Tap the yellow chip to send them to YNAB 4.' : archived ? 'Statement copy saved on this phone — it goes to Drive on your next sync.' : 'Nothing new to import.');
   };
+}
+
+/* ================= Statement archive: a copy of each imported PDF in Drive, as proof of balance ================= */
+const ARCHIVE_ROOT = 'Bank Statements';
+function statementClosing(st) {
+  const txs = (st && st.txs || []).filter((t) => t.date);
+  const withBal = txs.filter((t) => isFinite(t.balance));
+  const last = withBal.length ? withBal.reduce((a, t) => (t.date >= a.date ? t : a)) : null;
+  const amount = st && isFinite(st.stated) ? st.stated : last ? last.balance : NaN;
+  const dates = txs.map((t) => t.date).sort();
+  return { amount, from: dates[0] || '', to: dates[dates.length - 1] || '' };
+}
+async function queueArchive(I, acc) {
+  if (!I.blob || !I.statement || !acc) return false;
+  const st = I.statement, c = statementClosing(st), bankName = st.bank === 'jago' ? 'Bank Jago' : 'Bank Muamalat';
+  const name = `${acc.accountName} ${c.from}${c.to && c.to !== c.from ? ' to ' + c.to : ''}.pdf`;
+  const desc = [
+    `${bankName} statement for ${acc.accountName}, ${c.from} to ${c.to}.`,
+    isFinite(c.amount) ? `Closing balance: Rp ${Math.round(c.amount).toLocaleString('id-ID')} on ${c.to}.` : '',
+    st.chain && st.chain.ok ? `Balance check passed on ${st.chain.checked} rows.` : 'Balance check did not pass — compare with the bank.',
+    `Original file: ${I.file}. Saved by Four on ${todayISO()}.`
+  ].filter(Boolean).join(' ');
+  const q = (await IDB.get('kv', 'archive').catch(() => null)) || [];
+  if (q.some((x) => x.name === name && x.folder === acc.accountName && x.size === I.blob.size)) return true;
+  q.push({ id: YNAB4.guid(), blob: I.blob, size: I.blob.size, name, folder: acc.accountName, desc, closing: c.amount, to: c.to });
+  await IDB.put('kv', 'archive', q);
+  return true;
+}
+async function archiveFolder(budgetFolder, sub) {
+  const ids = LS.get('archiveIds', {});
+  const find = async (name, parent) => (await Drive.api('files', { q: `name='${name.replace(/'/g, "\\'")}' and '${parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`, fields: 'files(id)', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' })).files[0];
+  if (!ids.root) {
+    const meta = await Drive.api('files/' + budgetFolder.id, { fields: 'parents', supportsAllDrives: 'true' });
+    const parent = (meta.parents || [])[0];
+    const hit = await find(ARCHIVE_ROOT, parent);
+    ids.root = hit ? hit.id : await Drive.mkdir(ARCHIVE_ROOT, parent);
+  }
+  if (!ids[sub]) { const hit = await find(sub, ids.root); ids[sub] = hit ? hit.id : await Drive.mkdir(sub, ids.root); }
+  LS.set('archiveIds', ids);
+  return ids[sub];
+}
+async function flushArchive(budgetFolder) {
+  const q = (await IDB.get('kv', 'archive').catch(() => null)) || [];
+  let done = 0;
+  while (q.length) {
+    const x = q[0];
+    let dir;
+    try { dir = await archiveFolder(budgetFolder, x.folder); await Drive.api('files/' + dir, { fields: 'id,trashed', supportsAllDrives: 'true' }).then((m) => { if (m.trashed) throw new Error('trashed'); }); }
+    catch (e) { LS.del('archiveIds'); dir = await archiveFolder(budgetFolder, x.folder); } // folder moved or deleted: find or make it again
+    const same = (await Drive.api('files', { q: `name='${x.name.replace(/'/g, "\\'")}' and '${dir}' in parents and trashed=false`, fields: 'files(id,size)', supportsAllDrives: 'true', includeItemsFromAllDrives: 'true' })).files;
+    if (!same.some((f) => Number(f.size) === x.size)) {
+      const name = same.length ? x.name.replace(/\.pdf$/i, ` (${same.length + 1}).pdf`) : x.name;
+      await Drive.uploadBlob({ name, parents: [dir], description: x.desc, mimeType: 'application/pdf' }, x.blob);
+      done++;
+    }
+    q.shift(); await IDB.put('kv', 'archive', q);
+  }
+  if (done) S.archiveError = '';
+  return done;
 }
 
 function viewWelcome() {
