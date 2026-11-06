@@ -895,6 +895,26 @@ function rowsFromStatement(b, st) {
   });
 }
 // Mark rows already in the budget (same account, same amount, within 3 days) and set what to import
+// The bank's own reference ("ID# 261101-GXXXX") — the surest way to tell two rows apart
+function bankRef(text) { const m = /ID#\s*([A-Z0-9][A-Z0-9-]{5,})/i.exec(text || ''); return m ? m[1].toUpperCase() : null; }
+const STOPWORDS = new Set(['qris', 'payment', 'transfer', 'outgoing', 'incoming', 'card', 'bank', 'jago', 'with', 'pay', 'the', 'dan', 'untuk', 'cash', 'pt', 'tbk', 'indonesia', 'id']);
+function nameWords(s) { return new Set(String(s || '').toLowerCase().replace(/id#\s*\S+/g, ' ').split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !STOPWORDS.has(w))); }
+function similarNames(a, b) { const A = nameWords(a); for (const w of nameWords(b)) if (A.has(w)) return true; return false; }
+// Is this statement row already in YNAB 4? Returns { tx, sure } or null.
+//  sure: same bank reference, or same amount within 3 days and a matching name.
+//  not sure: same amount on the same day, entered by hand under a different name.
+function matchExisting(b, row, accountId, used) {
+  const ref = bankRef(row.memo);
+  const pool = b.transactions.filter((t) => t.accountId === accountId && !used.has(t.entityId) && Math.round(t.amount) === row.amount);
+  if (ref) { const hit = pool.find((t) => bankRef(t.memo) === ref); if (hit) return { tx: hit, sure: true }; }
+  const day = (t) => Math.abs(Date.parse(t.date) - Date.parse(row.date)) / 86400000;
+  const near = pool.filter((t) => day(t) <= 3 && !(ref && bankRef(t.memo))).sort((x, y) => day(x) - day(y)); // a row with another bank reference is another transaction
+  const label = (t) => [(b.payeeById[t.payeeId] || {}).name, t.importedPayee, t.memo].join(' ');
+  const named = near.find((t) => similarNames(row.payee + ' ' + row.memo, label(t)) || (t.transferTransactionId && row.transferAccountId && b.transactions.some((u) => u.entityId === t.transferTransactionId && u.accountId === row.transferAccountId)));
+  if (named) return { tx: named, sure: true };
+  const sameDay = near.find((t) => day(t) === 0 && !bankRef(t.memo));
+  return sameDay ? { tx: sameDay, sure: false } : null;
+}
 function finalizeRows(b, rows, accountId) {
   const used = new Set();
   const acc = b.accountById[accountId];
@@ -905,10 +925,10 @@ function finalizeRows(b, rows, accountId) {
     if (row._tr0 === undefined) row._tr0 = row.transferAccountId || null;
     // cash withdrawn from e.g. the Bekasi card goes into "Bekasi Cash", not the main Cash wallet
     if (!row.userTouched && row._tr0 && /^cash$/i.test((b.accountById[row._tr0] || {}).accountName || '')) row.transferAccountId = sibCash ? sibCash.id : row._tr0;
+    row.dupSure = false;
     if (!row.problem && accountId) {
-      const cands = b.transactions.filter((t) => t.accountId === accountId && Math.round(t.amount) === row.amount && !used.has(t.entityId) && Math.abs(Date.parse(t.date) - Date.parse(row.date)) <= 3 * 86400000);
-      cands.sort((x, y) => Math.abs(Date.parse(x.date) - Date.parse(row.date)) - Math.abs(Date.parse(y.date) - Date.parse(row.date)));
-      if (cands[0]) { used.add(cands[0].entityId); row.dup = cands[0]; }
+      const m = matchExisting(b, row, accountId, used);
+      if (m) { used.add(m.tx.entityId); row.dup = m.tx; row.dupSure = m.sure; }
     }
     if (row.transferAccountId === accountId) row.transferAccountId = null;
     if (!row.userTouched) row.include = !row.problem && !row.dup;
@@ -925,7 +945,7 @@ function rowChoice(b, r, accountId) {
 function viewImport() {
   const b = S.budget, I = S.imp = S.imp || { rows: null, accountId: null, file: '' };
   const rows = I.rows || [];
-  const nNew = rows.filter((r) => r.include).length, nDup = rows.filter((r) => r.dup).length, nBad = rows.filter((r) => r.problem).length;
+  const nNew = rows.filter((r) => r.include).length, nDup = rows.filter((r) => r.dup && r.dupSure && !r.include).length, nMaybe = rows.filter((r) => r.dup && !r.dupSure && !r.include).length, nBad = rows.filter((r) => r.problem).length;
   const needCat = (r) => {
     if (!I.accountId) return false;
     const f = b.accountById[I.accountId];
@@ -948,20 +968,24 @@ function viewImport() {
   ${st ? `<div class="panel note emb"><span class="dot" style="background:${st.chain.ok ? 'var(--go-hi)' : 'var(--bad-hi)'}"></span><span>${st.chain.ok ? `Balance check passed on all ${st.chain.checked} rows — nothing was missed.` : `Balance check failed at ${esc(st.chain.breaks[0].date)}: a row may be missing. Compare with the statement before importing.`}</span></div>` : ''}
   ${I.rows ? `
   <div class="panel" style="padding:10px 14px;display:flex;gap:8px;flex-wrap:wrap">
-    <span class="pill g">${nNew} to import</span><span class="pill z">${nDup} already in YNAB 4</span>${nBad ? `<span class="pill r">${nBad} not readable</span>` : ''}${missing ? `<span class="pill o">${missing} need a category</span>` : ''}
+    <span class="pill g">${nNew} to import</span><span class="pill z">${nDup} already in YNAB 4</span>${nMaybe ? `<span class="pill o">${nMaybe} to check</span>` : ''}${nBad ? `<span class="pill r">${nBad} not readable</span>` : ''}${missing ? `<span class="pill o">${missing} need a category</span>` : ''}
   </div>
   <div class="card">
     ${rows.map((r, i) => {
       const nc = needCat(r);
-      const showSel = !r.problem && !r.dup && r.include;
+      const showSel = !r.problem && r.include;
+      const dupName = r.dup ? ((b.payeeById[r.dup.payeeId] || {}).name || r.dup.importedPayee || '').replace(/^Transfer : /, 'Transfer : ') : '';
+      const dupNote = !r.dup ? '' : r.include ? `<span class="c">Importing anyway — YNAB 4 also has ${esc(dupName)} ${dm(r.dup.date)} for this amount</span>`
+        : r.dupSure ? `<span class="c">Already in YNAB 4: ${esc(dupName)} ${dm(r.dup.date)}</span>`
+        : `<span class="c" style="color:#9A6A00">Same amount, same day as ${esc(dupName)} — tick if it's a different purchase</span>`;
       return `<div class="imp ${r.include ? '' : 'off'}">
         <input type="checkbox" id="inc-${i}" data-inc="${i}" ${r.include ? 'checked' : ''} ${r.problem ? 'disabled' : ''} aria-label="Import row ${r.n}">
         <div style="min-width:0">
           <label for="inc-${i}"><b>${esc(r.payee || '(no payee)')}</b></label>
           <span class="c">${r.date ? dm(r.date) : '—'}${r.memo ? ' · ' + esc(r.memo) : ''}</span>
           ${r.problem ? `<span class="c" style="color:var(--bad)">${esc(r.problem)}</span>`
-            : r.dup ? `<span class="c">Already in YNAB 4: ${esc((b.payeeById[r.dup.payeeId] || {}).name || '')} ${dm(r.dup.date)}</span>`
-            : showSel ? `<select class="rowcat ${nc && !r.categoryId ? 'need' : ''}" data-cat="${i}" aria-label="Category for ${esc(r.payee)}">${rowChoice(b, r, I.accountId)}</select>${r.transferAccountId && nc ? `<select class="rowcat ${r.categoryId ? '' : 'need'}" data-cat2="${i}" aria-label="Budget category for this transfer">${categoryOptions(b, r.categoryId, r.amount > 0)}</select><span class="c">Transfer to an off-budget account — also needs a category</span>` : r.transferAccountId ? '<span class="c">Transfer — no category needed</span>' : r.transferHint ? '<span class="c">Looks like a transfer — pick the account</span>' : r.catSource && srcNote[r.catSource] ? `<span class="c">${srcNote[r.catSource]}</span>` : ''}` : ''}
+            : r.dup && !r.include ? dupNote
+            : showSel ? (r.dup ? dupNote : '') + `<select class="rowcat ${nc && !r.categoryId ? 'need' : ''}" data-cat="${i}" aria-label="Category for ${esc(r.payee)}">${rowChoice(b, r, I.accountId)}</select>${r.transferAccountId && nc ? `<select class="rowcat ${r.categoryId ? '' : 'need'}" data-cat2="${i}" aria-label="Budget category for this transfer">${categoryOptions(b, r.categoryId, r.amount > 0)}</select><span class="c">Transfer to an off-budget account — also needs a category</span>` : r.transferAccountId ? '<span class="c">Transfer — no category needed</span>' : r.transferHint ? '<span class="c">Looks like a transfer — pick the account</span>' : r.catSource && srcNote[r.catSource] ? `<span class="c">${srcNote[r.catSource]}</span>` : ''}` : ''}
         </div>
         <span class="amt ${r.amount > 0 ? 'in' : ''}">${r.amount > 0 ? '+' : ''}${fmt(r.amount)}</span>
       </div>`;
