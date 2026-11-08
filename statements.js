@@ -1019,12 +1019,30 @@
     return best && best.id;
   }
 
+  // Which account the statement belongs to, from its header.
+  //  Jago:     "Bekasi Card 503972700320" / "Main Pocket 501049924055" under the holder's name
+  //  Muamalat: the 10-digit number after "No Rekening"
+  function statementIdentity(items, bank) {
+    var head = items.slice(0, 60);
+    if (bank === 'jago') {
+      for (var i = 0; i < head.length; i++) {
+        var m = /^(.*?[A-Za-z].*?)\s+(\d{10,16})$/.exec(head[i].text);
+        if (m && !/^IDR\b/i.test(m[1])) return { pocket: m[1].trim(), accountNo: m[2] };
+      }
+    } else if (bank === 'muamalat') {
+      var at = head.findIndex(function (it) { return /no\.?\s*rekening/i.test(it.text); });
+      for (var j = Math.max(0, at); j < head.length; j++) if (/^\d{10}$/.test(head[j].text)) return { pocket: null, accountNo: head[j].text };
+    }
+    return { pocket: null, accountNo: null };
+  }
+
   async function readStatement(arrayBuffer) {
     var items = await extractItems(arrayBuffer);
     var bank = detectBank(items);
     if (!bank) throw new Error('This PDF does not look like a Bank Jago or Bank Muamalat statement.');
     var txs = bank === 'muamalat' ? parseMuamalat(items) : parseJago(items);
-    return { bank: bank, txs: txs, chain: validateChain(txs), stated: statedLatestBalance(items) };
+    var id = statementIdentity(items, bank);
+    return { bank: bank, txs: txs, chain: validateChain(txs), stated: statedLatestBalance(items), pocket: id.pocket, accountNo: id.accountNo };
   }
 
   root.Statements = {

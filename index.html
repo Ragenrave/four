@@ -821,7 +821,22 @@ function matchCategory(b, label) {
   if (hits.length > 1 && master) { const mm = hits.find((c) => { const mc = b.masterCategories.find((x) => x.entityId === c.masterCategoryId); return mc && mc.name.toLowerCase() === master; }); if (mm) return mm.entityId; }
   return hits[0] ? hits[0].entityId : null;
 }
-function guessAccount(b, filename, bank) {
+// Which YNAB 4 account a statement goes into: the account number you used before, then the
+// pocket name printed on the statement, then the file name, then the bank.
+function guessAccount(b, filename, bank, st) {
+  const all = b.accountBalances().filter((a) => !a.hidden);
+  if (st && st.accountNo) { const id = LS.get('acctByNo', {})[st.accountNo]; if (id && all.some((a) => a.id === id)) return id; }
+  const norm = (x) => String(x || '').toLowerCase().replace(/[_\-]+/g, ' ').replace(/\s+/g, ' ').trim();
+  if (st && st.pocket) {
+    const p = norm(st.pocket);
+    const hit = all.filter((a) => norm(a.name).includes(p) && (bank !== 'jago' || !/muamalat/i.test(a.name)));
+    if (hit.length === 1) return hit[0].id;
+    if (hit.length > 1) return (hit.find((a) => /jago/i.test(a.name)) || hit[0]).id;
+  }
+  const fname = norm(filename);
+  const byName = all.filter((a) => a.name.length > 4 && fname.includes(norm(a.name))).sort((x, y) => y.name.length - x.name.length)[0];
+  if (byName) return byName.id;
+  if (st && st.pocket) return null; // a pocket we have no account for: let him choose rather than guess Main
   const f = ((filename || '') + ' ' + (bank || '')).toLowerCase(), accts = b.accountBalances().filter((a) => a.onBudget);
   if (/jago/.test(f)) return (accts.find((a) => /jago.*main/i.test(a.name)) || accts.find((a) => /jago/i.test(a.name)) || {}).id;
   if (/muamalat/.test(f)) return (accts.find((a) => /muamalat/i.test(a.name)) || {}).id;
@@ -963,7 +978,8 @@ function viewImport() {
   <div class="card form">
     <div><label for="imp-file">STATEMENT (PDF OR CSV)</label><input id="imp-file" type="file" accept=".pdf,.csv,application/pdf,text/csv,text/plain" style="height:auto;padding:10px;border:1px dashed #9DB6C8"></div>
     <div><label for="imp-acct">INTO ACCOUNT</label><select id="imp-acct" class="sel"><option value="">Choose the account…</option>${accountOptions(b, I.accountId, (a) => !a.hidden)}</select></div>
-    ${I.busy ? `<p>Reading ${esc(I.file)}…</p>` : I.file ? `<p>${esc(I.file)} · ${rows.length} rows${st ? ' · ' + (st.bank === 'jago' ? 'Bank Jago' : 'Bank Muamalat') : ''}</p>` : ''}
+    ${I.busy ? `<p>Reading ${esc(I.file)}…</p>` : I.file ? `<p>${esc(I.file)} · ${rows.length} rows${st ? ' · ' + (st.bank === 'jago' ? 'Bank Jago' : 'Bank Muamalat') + (st.pocket ? ' ' + esc(st.pocket) : '') + (st.accountNo ? ' ··' + esc(st.accountNo.slice(-4)) : '') : ''}</p>
+    ${st && !I.busy ? (I.accountId && I.autoPicked ? `<p class="c" style="color:var(--go-hi)">Account picked from the statement header — change it above if that's wrong.</p>` : !I.accountId ? `<p class="c" style="color:#9A6A00">No account matches ${esc(st.pocket || 'this statement')}. Choose one above — Four remembers it next time.</p>` : '') : ''}` : ''}
   </div>
   ${st ? `<div class="panel note emb"><span class="dot" style="background:${st.chain.ok ? 'var(--go-hi)' : 'var(--bad-hi)'}"></span><span>${st.chain.ok ? `Balance check passed on all ${st.chain.checked} rows — nothing was missed.` : `Balance check failed at ${esc(st.chain.breaks[0].date)}: a row may be missing. Compare with the statement before importing.`}</span></div>` : ''}
   ${I.rows ? `
@@ -998,7 +1014,9 @@ function bindImport() {
   const b = S.budget, I = S.imp;
   const rebuild = () => { if (I.raw) I.rows = finalizeRows(b, I.raw, I.accountId); render(); };
   document.getElementById('imp-file').onchange = (e) => { const f = e.target.files[0]; if (f) importFile(f); };
-  document.getElementById('imp-acct').onchange = (e) => { I.accountId = e.target.value || null; I.rows = I.raw ? finalizeRows(b, I.raw, I.accountId) : I.rows; render(); };
+  document.getElementById('imp-acct').onchange = (e) => { I.accountId = e.target.value || null; I.autoPicked = false;
+    if (I.accountId && I.statement && I.statement.accountNo) { const m = LS.get('acctByNo', {}); m[I.statement.accountNo] = I.accountId; LS.set('acctByNo', m); } /* remember for next time */
+    I.rows = I.raw ? finalizeRows(b, I.raw, I.accountId) : I.rows; render(); };
   bindImportRows();
 }
 async function importFile(f) {
@@ -1013,7 +1031,8 @@ async function importFile(f) {
         const st = await Statements.readStatement(await f.arrayBuffer());
         if (!st.txs.length) throw new Error('No transactions found in this PDF.');
         I.statement = st; I.blob = f;
-        I.accountId = guessAccount(b, f.name, st.bank) || I.accountId;
+        I.accountId = guessAccount(b, f.name, st.bank, st);
+        I.autoPicked = !!I.accountId;
         I.raw = rowsFromStatement(b, st);
       } else {
         I.raw = rowsFromCSV(b, await f.text());
